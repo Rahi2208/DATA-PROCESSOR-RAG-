@@ -1,0 +1,13 @@
+# file sampah python
+__pycache__/
+*.py[oc]
+.pytest_cache/
+
+# tempat package di-install, bisa dibikin ulang pakai `uv sync`
+.venv/
+
+# rahasia & setting lokal
+.env
+
+# file yang di-upload user (bisa berisi data pribadi)
+uploads/

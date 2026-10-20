@@ -1,1 +1,1 @@
-# data_agent: agent yang ngubah data mentah jadi tabel sesuai guide
+# data_agent: agent that turns raw data into tables following a guide

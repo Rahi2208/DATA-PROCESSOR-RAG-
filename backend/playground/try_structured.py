@@ -1,5 +1,5 @@
-# try_structured.py: tes model jawab dalam bentuk JSON sesuai schema Pydantic
-# jalanin: uv run python playground/try_structured.py
+# try_structured.py: test the model answering in JSON that matches a Pydantic schema
+# run: uv run python playground/try_structured.py
 import logging
 
 from pydantic import BaseModel
@@ -10,13 +10,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
-class Rumus(BaseModel):
-    nama: str
-    rumus: str
-    variabel: list[str]
+class Formula(BaseModel):
+    name: str
+    formula: str
+    variables: list[str]
 
 
-hasil = llm.structured('Jelaskan rumus periode bandul sederhana.', Rumus, label='coba')
-print(type(hasil))    # <class '__main__.Rumus'>  -> udah jadi objek Python, bukan teks
-print(hasil.rumus)
-print(hasil.variabel)
+result = llm.structured('Explain the formula for the period of a simple pendulum.', Formula, label='try')
+print(type(result))    # <class '__main__.Formula'>  -> already a Python object, not text
+print(result.formula)
+print(result.variables)

@@ -1,4 +1,4 @@
-# test endpoint FastAPI pakai TestClient (gak perlu server beneran)
+# test the FastAPI endpoints with TestClient (no real server needed)
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,7 +10,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main.config, 'UPLOAD_DIR', tmp_path)
     sent = []
 
-    async def fake_send(event):  # gantiin kirim event ke Inngest
+    async def fake_send(event):  # stands in for sending the event to Inngest
         sent.append(event)
         return ['event-123']
 
@@ -24,24 +24,24 @@ def test_health(client):
     assert client.get('/api/health').json()['ok'] is True
 
 
-def test_upload_tanpa_file_data_ditolak(client):
+def test_upload_without_data_file_rejected(client):
     res = client.post('/api/jobs', files=[('files', ('guide.pdf', b'%PDF', 'application/pdf'))])
-    assert res.status_code == 400 and 'file data' in res.json()['detail']
+    assert res.status_code == 400 and 'data file' in res.json()['detail']
 
 
-def test_upload_jenis_file_aneh_ditolak(client):
+def test_upload_unknown_file_type_rejected(client):
     res = client.post('/api/jobs', files=[('files', ('virus.exe', b'x', 'application/octet-stream'))])
     assert res.status_code == 400
 
 
-def test_upload_valid_kirim_event(client, tmp_path):
+def test_valid_upload_sends_event(client, tmp_path):
     files = [
         ('files', ('guide.pdf', b'%PDF', 'application/pdf')),
-        ('files', ('../../data.xlsx', b'xlsx', 'application/octet-stream')),  # nama file "nakal"
+        ('files', ('../../data.xlsx', b'xlsx', 'application/octet-stream')),  # "naughty" file name
     ]
     res = client.post('/api/jobs', files=files)
     assert res.status_code == 200 and res.json()['event_id'] == 'event-123'
 
     data = client.sent[0].data
-    assert data['data_path'].startswith(str(tmp_path))  # tetap di dalam folder upload
+    assert data['data_path'].startswith(str(tmp_path))  # stays inside the upload folder
     assert data['data_path'].endswith('data.xlsx')

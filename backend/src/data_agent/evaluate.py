@@ -1,6 +1,6 @@
-# evaluate.py: jalanin semua contoh di samples/ dan bandingin sama expected.json
-# jalanin: uv run data-agent-eval
-# dipakai tiap kali ganti model / ubah prompt, biar ketahuan hasilnya makin bagus atau jelek
+# evaluate.py: runs every example in samples/ and compares it with expected.json
+# run: uv run data-agent-eval
+# use it every time you change the model / edit a prompt, to see whether results got better or worse
 import json
 import logging
 import math
@@ -11,7 +11,7 @@ from pathlib import Path
 from data_agent.doc_loader import classify
 
 SAMPLES_DIR = Path('samples')
-TOLERANCE = 1e-3  # selisih relatif yang masih dianggap sama
+TOLERANCE = 1e-3  # relative difference still counted as equal
 
 
 def _same(a, b) -> bool:
@@ -21,23 +21,23 @@ def _same(a, b) -> bool:
 
 
 def compare(expected: list[dict], actual: list[dict]) -> list[str]:
-    # balikin daftar masalah; kosong = lolos
+    # return a list of problems; empty = pass
     problems = []
     if len(expected) != len(actual):
-        problems.append(f'jumlah tabel: harusnya {len(expected)}, dapat {len(actual)}')
+        problems.append(f'number of tables: expected {len(expected)}, got {len(actual)}')
     for i, (exp, act) in enumerate(zip(expected, actual), start=1):
         if len(exp['rows']) != len(act['rows']):
-            problems.append(f"tabel {i}: jumlah baris {len(act['rows'])}, harusnya {len(exp['rows'])}")
+            problems.append(f"table {i}: {len(act['rows'])} rows, expected {len(exp['rows'])}")
             continue
         for r, (er, ar) in enumerate(zip(exp['rows'], act['rows']), start=1):
             if len(er) != len(ar) or not all(_same(x, y) for x, y in zip(er, ar)):
-                problems.append(f'tabel {i} baris {r}: dapat {ar}, harusnya {er}')
+                problems.append(f'table {i} row {r}: got {ar}, expected {er}')
                 break
     return problems
 
 
 def main() -> None:
-    # import di dalam fungsi: compare() bisa dipakai test tanpa harus nyiapin pipeline/LLM
+    # imported inside the function: compare() can be used in tests without setting up the pipeline/LLM
     from data_agent.pipeline import run_all
 
     logging.basicConfig(level=logging.WARNING)
@@ -64,5 +64,5 @@ def main() -> None:
             passed += 1
             print(f'✅ {folder.name}')
 
-    print(f'\n{passed}/{len(folders)} sample lolos')
+    print(f'\n{passed}/{len(folders)} samples passed')
     sys.exit(0 if passed == len(folders) else 1)

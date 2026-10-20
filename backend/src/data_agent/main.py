@@ -1,5 +1,5 @@
-# main.py: server FastAPI + fungsi Inngest
-# jalanin: uv run uvicorn data_agent.main:app --reload --port 8000
+# main.py: FastAPI server + Inngest function
+# run: uv run uvicorn data_agent.main:app --reload --port 8000
 import asyncio
 import logging
 import uuid
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title='Data Process Agent')
 
-# CORS: izinin frontend (beda port = beda "origin") manggil API ini dari browser
+# CORS: allow the frontend (different port = different "origin") to call this API from the browser
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.FRONTEND_ORIGIN],
@@ -40,14 +40,14 @@ inngest_client = inngest.Inngest(
 
 
 def in_thread(fn: Callable) -> Callable:
-    # fungsi pipeline itu "blocking" (nunggu LLM / baca file).
-    # dijalanin di thread lain biar server tetap bisa ngelayanin request lain
+    # the pipeline functions are "blocking" (waiting on the LLM / reading files).
+    # run them in another thread so the server can keep serving other requests
     async def wrapper(*args):
         return await asyncio.to_thread(fn, *args)
     return wrapper
 
 
-# ---------- fungsi Inngest: 5 step ----------
+# ---------- Inngest function: 5 steps ----------
 @inngest_client.create_function(
     fn_id='process-data-job',
     trigger=inngest.TriggerEvent(event='data/process'),
@@ -77,7 +77,7 @@ async def process_job(ctx: inngest.Context) -> dict:
 inngest.fast_api.serve(app, inngest_client, [process_job])
 
 
-# ---------- endpoint buat frontend ----------
+# ---------- endpoints for the frontend ----------
 @app.get('/api/health')
 async def health() -> dict:
     return {'ok': True, 'model': config.LLM_MODEL}
@@ -85,18 +85,18 @@ async def health() -> dict:
 
 @app.post('/api/jobs')
 async def create_job(files: list[UploadFile]) -> dict:
-    # 1. cek file: minimal 1 guide, tepat 1 file data
+    # 1. check the files: at least 1 guide, exactly 1 data file
     guides = [f for f in files if classify(f.filename or '') == 'guide']
     datas = [f for f in files if classify(f.filename or '') == 'data']
     unknown = [f.filename for f in files if classify(f.filename or '') is None]
     if unknown:
-        raise HTTPException(400, f'jenis file gak didukung: {unknown}')
+        raise HTTPException(400, f'unsupported file type: {unknown}')
     if not guides:
-        raise HTTPException(400, 'butuh minimal 1 file guide (PDF/gambar)')
+        raise HTTPException(400, 'need at least 1 guide file (PDF/image)')
     if len(datas) != 1:
-        raise HTTPException(400, 'butuh tepat 1 file data (.xlsx/.csv)')
+        raise HTTPException(400, 'need exactly 1 data file (.xlsx/.csv)')
 
-    # 2. simpan file ke uploads/<job_id>/
+    # 2. save the files to uploads/<job_id>/
     job_id = uuid.uuid4().hex
     job_dir = config.UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
@@ -104,19 +104,19 @@ async def create_job(files: list[UploadFile]) -> dict:
     for f in guides + datas:
         content = await f.read()
         if len(content) > config.MAX_UPLOAD_MB * 1024 * 1024:
-            raise HTTPException(413, f'{f.filename} lebih dari {config.MAX_UPLOAD_MB} MB')
-        path = job_dir / Path(f.filename or 'file').name  # cuma nama file, biar gak bisa "kabur" dari folder
+            raise HTTPException(413, f'{f.filename} is larger than {config.MAX_UPLOAD_MB} MB')
+        path = job_dir / Path(f.filename or 'file').name  # file name only, so it can't "escape" the folder
         path.write_bytes(content)
         saved[classify(path.name)].append(str(path))
 
-    # 3. kirim event ke Inngest -> fungsi process_job jalan di background
+    # 3. send an event to Inngest -> the process_job function runs in the background
     ids = await inngest_client.send(inngest.Event(name='data/process', data={
         'job_id': job_id,
         'work_dir': str(job_dir),
         'guide_paths': saved['guide'],
         'data_path': saved['data'][0],
     }))
-    logger.info('job %s dibuat, event %s', job_id, ids[0])
+    logger.info('job %s created, event %s', job_id, ids[0])
     return {'job_id': job_id, 'event_id': ids[0]}
 
 
@@ -129,9 +129,9 @@ async def job_status(event_id: str) -> JobStatus:
 async def export_job(event_id: str) -> Response:
     status = await get_job_status(event_id)
     if status.status != 'completed' or not status.result:
-        raise HTTPException(409, 'job belum selesai')
+        raise HTTPException(409, 'job is not finished yet')
     return Response(
         content=tables_to_excel(status.result),
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename="hasil_{event_id[:8]}.xlsx"'},
+        headers={'Content-Disposition': f'attachment; filename="result_{event_id[:8]}.xlsx"'},
     )

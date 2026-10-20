@@ -1,4 +1,4 @@
-// ResultTable.tsx: nampilin SATU tabel hasil, bisa di-sort dengan klik judul kolom
+// ResultTable.tsx: shows ONE result table, sortable by clicking a column header
 import { useMemo } from 'react'
 import {
   createColumnHelper,
@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 type Row = Cell[]
 
-// fitur tabel yang dipakai: cuma sorting. Ditaruh di luar komponen biar gak dibikin ulang tiap render
+// table features in use: only sorting. Kept outside the component so it isn't recreated on every render
 const features = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
@@ -25,7 +25,7 @@ const features = tableFeatures({
 const helper = createColumnHelper<typeof features, Row>()
 
 export function ResultTable({ table }: { table: ResultTableData }) {
-  // data dari backend bentuknya array per baris, jadi kolom ke-i diambil pakai row[i]
+  // data from the backend is an array per row, so the i-th column is read with row[i]
   const columns = useMemo(
     () =>
       helper.columns(
@@ -40,7 +40,7 @@ export function ResultTable({ table }: { table: ResultTableData }) {
     <Card>
       <CardHeader>
         <CardTitle>{table.title}</CardTitle>
-        <CardDescription>{table.rows.length} baris</CardDescription>
+        <CardDescription>{table.rows.length} {table.rows.length === 1 ? 'row' : 'rows'}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
@@ -74,9 +74,9 @@ export function ResultTable({ table }: { table: ResultTableData }) {
           </TableBody>
         </Table>
 
-        {/* rumus yang dipakai: biar user bisa ngecek LLM gak salah baca guide */}
+        {/* formulas used: so the user can check the LLM didn't misread the guide */}
         <div className="rounded-md bg-muted p-3">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Langkah & rumus</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Steps & formulas</p>
           <ul className="space-y-1 font-mono text-xs">
             {table.formulas.map((f, i) => (
               <li key={i}>{f}</li>

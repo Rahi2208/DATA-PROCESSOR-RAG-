@@ -1,4 +1,4 @@
-# test fungsi Inngest lengkap (5 step) pakai client "mocked" dari Inngest + LLM palsu
+# test the full Inngest function (5 steps) using Inngest's "mocked" client + a fake LLM
 import inngest
 from inngest.experimental import mocked
 
@@ -6,12 +6,12 @@ from data_agent import main, pipeline
 from data_agent.custom_types import Instructions, Plan, Review
 
 
-def test_process_job_jalan_sampai_selesai(bandul_dir, bandul_plan, monkeypatch, tmp_path):
+def test_process_job_runs_to_completion(pendulum_dir, pendulum_plan, monkeypatch, tmp_path):
     def fake_structured(prompt, schema, images=None, label=''):
         if schema is Instructions:
-            return Instructions(items=['hitung g'], expected_tables=['Hasil', 'Ringkasan'])
+            return Instructions(items=['calculate g'], expected_tables=['Results', 'Summary'])
         if schema is Plan:
-            return bandul_plan
+            return pendulum_plan
         return Review(items=[])
 
     monkeypatch.setattr(pipeline.llm, 'structured', fake_structured)
@@ -19,11 +19,11 @@ def test_process_job_jalan_sampai_selesai(bandul_dir, bandul_plan, monkeypatch, 
     event = inngest.Event(name='data/process', data={
         'job_id': 'test',
         'work_dir': str(tmp_path),
-        'guide_paths': [str(bandul_dir / 'guide.pdf')],
-        'data_path': str(bandul_dir / 'data.xlsx'),
+        'guide_paths': [str(pendulum_dir / 'guide.pdf')],
+        'data_path': str(pendulum_dir / 'data.xlsx'),
     })
 
     res = mocked.trigger(main.process_job, event, client)
 
     assert res.status == mocked.Status.COMPLETED
-    assert [t['id'] for t in res.output['tables']] == ['hasil', 'ringkasan']
+    assert [t['id'] for t in res.output['tables']] == ['results', 'summary']

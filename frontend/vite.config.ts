@@ -7,7 +7,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    // "@/..." = folder src/, biar import gak "../../../"
+    // "@/..." = the src/ folder, so imports don't need "../../../"
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
 })

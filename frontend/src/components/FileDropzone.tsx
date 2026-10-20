@@ -1,4 +1,4 @@
-// FileDropzone.tsx: area drag & drop + daftar file yang udah dipilih
+// FileDropzone.tsx: drag & drop area + list of the files already chosen
 import { FileSpreadsheet, FileText, Upload, X } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { fileKind } from '@/api/files'
@@ -21,7 +21,7 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/csv': ['.csv'],
     },
-    // file baru ditambahin ke daftar (bukan ngeganti)
+    // new files are added to the list (not replacing it)
     onDrop: (accepted) => onChange([...files, ...accepted]),
   })
 
@@ -40,10 +40,10 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
         <input {...getInputProps()} />
         <Upload className="size-8 text-muted-foreground" />
         <p className="font-medium">
-          {isDragActive ? 'Lepas file di sini…' : 'Drag & drop file, atau klik buat pilih'}
+          {isDragActive ? 'Drop files here…' : 'Drag & drop files, or click to choose'}
         </p>
         <p className="text-sm text-muted-foreground">
-          Guide: PDF / gambar · Data: 1 file .xlsx / .csv
+          Guide: PDF / image · Data: 1 .xlsx / .csv file
         </p>
       </div>
 
@@ -58,7 +58,7 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
                 <span className="flex-1 truncate text-sm">{file.name}</span>
                 <Badge variant={kind === 'data' ? 'default' : 'secondary'}>{kind ?? '?'}</Badge>
                 <Button variant="ghost" size="icon" onClick={() => remove(i)} disabled={disabled}
-                        aria-label={`Hapus ${file.name}`}>
+                        aria-label={`Remove ${file.name}`}>
                   <X />
                 </Button>
               </li>

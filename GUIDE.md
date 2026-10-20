@@ -1,253 +1,253 @@
-# 📘 Data Process Agent: Panduan Lengkap
+# 📘 Data Process Agent: Complete Guide
 
-> Satu file berisi **konsep, prompt, dependencies, workflow, dan semua kode** sampai app jadi dan bisa di-maintain.
-> Semua kode di sini udah dites: **36 test lolos** dan frontend **berhasil di-build**. Bagian yang manggil model Ollama asli dites pakai "LLM palsu", jadi perilaku model asli tetap dicek di Langkah 5 dan 12.
+> One file with the **concepts, prompts, dependencies, workflow, and all the code** until the app is done and maintainable.
+> All the code here has been tested: **36 tests pass** and the frontend **builds successfully**. The parts that call the real Ollama model were tested with a "fake LLM", so the real model's behavior is still checked in Steps 5 and 12.
 >
-> 🔄 **Update 2026-10-18** (waktu dibangun beneran): disesuaiin sama npm 12, shadcn 4, dan inngest-cli 1.46.
-> Ada perbaikan di `jobs.py` (+ `tests/test_jobs.py`) dan perintah Inngest/shadcn. Detailnya ditandai 🔄 di tiap langkah.
+> 🔄 **Update 2026-10-18** (when it was actually built): adjusted for npm 12, shadcn 4, and inngest-cli 1.46.
+> There are fixes in `jobs.py` (+ `tests/test_jobs.py`) and in the Inngest/shadcn commands. The details are marked with 🔄 in each step.
 
 ---
 
-## 🧭 Cara pakai panduan ini
+## 🧭 How to use this guide
 
-- Kerjain **berurutan**, satu langkah sampai bagian ✅ Cek-nya lolos, baru lanjut
-- Tiap langkah isinya: 🎯 tujuan → 💡 konsep → 🧩 perintah/kode → ✅ cek
-- Semua perintah ditulis buat **Arch Linux + fish**
-- Kode ditulis **lengkap**. Tugas lu: ketik/copy, jalanin, dan **baca komentarnya** biar paham
-- Kalau macet, lompat ke [🆘 Troubleshooting](#-troubleshooting)
+- Work through it **in order**, one step at a time, until its ✅ Check passes, then move on
+- Each step contains: 🎯 goal → 💡 concept → 🧩 commands/code → ✅ check
+- All commands are written for **Arch Linux + fish**
+- The code is written **in full**. Your job: type/copy it, run it, and **read the comments** so you understand it
+- If you get stuck, jump to [🆘 Troubleshooting](#-troubleshooting)
 
-### Daftar isi
+### Table of contents
 
-- [A. Konsep](#a-konsep)
-- [B. Prompt buat Claude](#b-prompt-buat-claude)
+- [A. Concepts](#a-concepts)
+- [B. Prompt for Claude](#b-prompt-for-claude)
 - [C. Dependencies](#c-dependencies)
-- [D. Struktur folder akhir](#d-struktur-folder-akhir)
+- [D. Final folder structure](#d-final-folder-structure)
 - [E. Part 1: Backend (AI Agent)](#e-part-1-backend-ai-agent)
 - [F. Part 2: Frontend (React)](#f-part-2-frontend-react)
 - [G. Maintenance](#g-maintenance)
 - [🆘 Troubleshooting](#-troubleshooting)
-- [H. Pengembangan berikutnya](#h-pengembangan-berikutnya)
+- [H. Next steps](#h-next-steps)
 
 ---
 
-# A. Konsep
+# A. Concepts
 
-## A1. App ini ngapain?
+## A1. What does this app do?
 
 ```
 INPUT                                   OUTPUT
-┌──────────────────────┐                ┌──────────────────────────┐
-│ guide.pdf / foto     │                │ Tabel 1: Hasil Perhitungan│
-│ "hitung T = t/10,    │   drag & drop  │ Tabel 2: Ringkasan        │
-│  g = 4π²L/T², ..."   │ ─────────────→ │ (+ rumus yang dipakai)    │
-│                      │   pencet Enter │ (+ cek tiap instruksi)    │
-│ data.xlsx            │                │ (+ download Excel)        │
-│ (data mentah)        │                └──────────────────────────┘
+┌──────────────────────┐                ┌───────────────────────────────┐
+│ guide.pdf / photo    │                │ Table 1: Calculation Results  │
+│ "compute T = t/10,   │   drag & drop  │ Table 2: Summary              │
+│  g = 4π²L/T², ..."   │ ─────────────→ │ (+ formulas used)             │
+│                      │   press Enter  │ (+ check of each instruction) │
+│ data.xlsx            │                │ (+ Excel download)            │
+│ (raw data)           │                └───────────────────────────────┘
 └──────────────────────┘
 ```
 
-- **Guide**: PDF atau gambar yang isinya cara ngolah data (rumus, pembulatan, format tabel)
-- **Data**: 1 file Excel/CSV berisi data mentah (misal hasil eksperimen)
-- **Hasil**: tabel sebanyak yang diminta guide, dengan kolom sesuai template di guide
+- **Guide**: a PDF or image that explains how to process the data (formulas, rounding, table format)
+- **Data**: 1 Excel/CSV file containing raw data (e.g. experiment results)
+- **Result**: as many tables as the guide asks for, with columns matching the template in the guide
 
-## A2. Ide utama: LLM yang ngerti, pandas yang ngitung
+## A2. Main idea: the LLM understands, pandas calculates
 
-LLM itu jago **ngerti bahasa**, tapi gak bisa diandalkan buat **ngitung ribuan angka**. Jadi tugasnya dibagi:
+An LLM is great at **understanding language**, but can't be relied on to **calculate thousands of numbers**. So the work is split:
 
 ```
-guide.pdf ──→ LLM ──→ RENCANA (JSON)          ← LLM cuma nerjemahin guide
+guide.pdf ──→ LLM ──→ PLAN (JSON)          ← the LLM only translates the guide
                          ↑
-data.xlsx ──→ pandas ──→ nama kolom + 5 baris contoh   ← LLM gak lihat semua data
+data.xlsx ──→ pandas ──→ column names + 5 example rows   ← the LLM doesn't see all the data
 
-RENCANA + data.xlsx ──→ pandas ──→ tabel hasil   ← angkanya pasti bener
+PLAN + data.xlsx ──→ pandas ──→ result tables   ← the numbers are guaranteed correct
 ```
 
-Contoh rencana yang dibikin LLM:
+Example of a plan made by the LLM:
 
 ```json
 {"tables": [{
-  "id": "hasil", "title": "Hasil Perhitungan", "source": "data",
+  "id": "results", "title": "Calculation Results", "source": "data",
   "steps": [
-    {"op": "compute", "new_column": "t_periode", "expr": "waktu_10_ayunan_s / 10"},
-    {"op": "compute", "new_column": "g", "expr": "4 * pi ** 2 * panjang_tali_m / t_periode ** 2"},
-    {"op": "round", "columns": ["t_periode", "g"], "decimals": 3}
+    {"op": "compute", "new_column": "t_period", "expr": "time_10_swings_s / 10"},
+    {"op": "compute", "new_column": "g", "expr": "4 * pi ** 2 * string_length_m / t_period ** 2"},
+    {"op": "round", "columns": ["t_period", "g"], "decimals": 3}
   ]
 }]}
 ```
 
-Tiap `op` itu fungsi pandas kecil yang **kita tulis sendiri** dan ada test-nya. LLM cuma bisa milih op dari daftar, gak bisa ngejalanin kode bebas.
+Each `op` is a small pandas function that **we write ourselves** and that has tests. The LLM can only pick an op from the list; it can't run arbitrary code.
 
-## A3. Alur proses: 5 step Inngest
+## A3. Process flow: 5 Inngest steps
 
 ```
-1. load_inputs           baca guide (teks + gambar) & ringkasan Excel        [tanpa LLM]
-2. extract_instructions  LLM bikin checklist instruksi dari guide            [LLM]
-3. make_plan             LLM bikin rencana JSON, langsung diuji di data asli [LLM]
-                         kalau error → pesan error dikirim balik ke LLM (maks 3x)
-4. run_plan              pandas jalanin rencana                              [tanpa LLM]
-5. review                LLM ngecek: tiap instruksi udah dipenuhi?           [LLM]
+1. load_inputs           read the guide (text + images) & Excel summary      [no LLM]
+2. extract_instructions  LLM makes an instruction checklist from the guide   [LLM]
+3. make_plan             LLM makes a JSON plan, dry-run on the real data     [LLM]
+                         on error → the error message is sent back to the LLM (max 3x)
+4. run_plan              pandas runs the plan                                [no LLM]
+5. review                LLM checks: was each instruction followed?          [LLM]
 ```
 
-Kenapa pakai **Inngest**:
-- Tiap step **dicatat**: input, output, dan error-nya kelihatan di dashboard
-- Step yang gagal **dicoba ulang** tanpa ngulang step yang udah sukses
-- Proses jalan di **background**, jadi user gak nunggu satu request yang lama
+Why use **Inngest**:
+- Every step is **recorded**: its input, output, and errors are visible in the dashboard
+- A failed step is **retried** without repeating the steps that already succeeded
+- The process runs in the **background**, so the user doesn't wait on one long request
 
-## A4. Kenapa React gak langsung ngobrol sama Inngest?
+## A4. Why doesn't React talk to Inngest directly?
 
-React jalan di **browser user**, jadi gak boleh pegang akses ke sistem internal. Semua lewat FastAPI:
+React runs in the **user's browser**, so it must not have access to internal systems. Everything goes through FastAPI:
 
 ```
 Browser (React)
-   │  POST /api/jobs (upload file)      GET /api/jobs/{id} (cek status, tiap 1,5 detik)
+   │  POST /api/jobs (upload files)     GET /api/jobs/{id} (check status, every 1.5 seconds)
    ▼
-FastAPI ──kirim event──→ Inngest ──jalanin──→ fungsi process_job (5 step)
+FastAPI ──send event──→ Inngest ──runs──→ process_job function (5 steps)
    │                        │
-   └──── nanya status ──────┘
+   └──── asks for status ────┘
 ```
 
-## A5. Keputusan teknis & alasannya
+## A5. Technical decisions & why
 
-| Keputusan | Alasan |
+| Decision | Reason |
 |---|---|
-| Ollama, nama model di `.env` | Lokal = gratis & data gak keluar dari laptop. Pindah ke cloud cukup ganti `.env`. 🔄 Laptop sekarang cuma CPU, jadi pakai `qwen3-vl:2b-instruct` dulu, nanti pindah ke `glm-5.3-flash:cloud` |
-| **Rencana JSON + pandas** | Angka pasti benar, aman (gak ngejalanin kode buatan AI), gampang dites |
-| Satu model `Step` untuk semua op | Schema JSON-nya simpel, lebih gampang diikutin model lokal yang kecil |
-| Nama kolom dirapihin (`Panjang Tali (m)` → `panjang_tali_m`) | Biar aman dipakai di rumus |
-| Tiap step "uji coba" di data asli | Rencana yang salah ketahuan sebelum hasilnya dikasih ke user |
-| Step `review` + rumus ditampilin di UI | LLM bisa salah baca rumus (misal `T²` jadi `T*2`), jadi user harus bisa ngecek |
-| Qdrant **ditunda** | Guide biasanya pendek dan muat di konteks model. RAG malah berisiko bikin instruksi kelewat |
-| Satu pintu per urusan (`config.py`, `llm.py`, `prompts.py`) | Mau ganti setting / model / prompt? Cukup buka 1 file |
+| Ollama, model name in `.env` | Local = free & data never leaves the laptop. Moving to the cloud only needs a `.env` change. 🔄 The laptop is CPU-only right now, so use `qwen3-vl:2b-instruct` for now, then move to `glm-5.3-flash:cloud` later |
+| **JSON plan + pandas** | Numbers are guaranteed correct, it's safe (no AI-written code gets executed), and easy to test |
+| One `Step` model for all ops | The JSON schema stays simple, easier for a small local model to follow |
+| Column names cleaned up (`String Length (m)` → `string_length_m`) | So they're safe to use in formulas |
+| Every step is "dry-run" on the real data | A wrong plan is caught before the result reaches the user |
+| `review` step + formulas shown in the UI | The LLM can misread a formula (e.g. `T²` becomes `T*2`), so the user must be able to check |
+| Qdrant **postponed** | Guides are usually short and fit in the model's context. RAG would actually risk dropping instructions |
+| One place per concern (`config.py`, `llm.py`, `prompts.py`) | Want to change a setting / model / prompt? Just open 1 file |
 
 ---
 
-# B. Prompt buat Claude
+# B. Prompt for Claude
 
-Pakai prompt ini kalau mau lanjut belajar bareng Claude (di chat atau Claude Code). Udah disesuaiin sama semua keputusan di atas.
+Use this prompt if you want to keep learning together with Claude (in chat or Claude Code). It's already adjusted to all the decisions above.
 
 ````markdown
 # Project: Data Process Agent App
 
-## 🎯 Konsep
-User drag & drop file GUIDE (PDF/gambar berisi cara olah data: rumus, pembulatan,
-format tabel) + 1 file DATA mentah (.xlsx/.csv, misal hasil eksperimen), pencet Enter,
-app balikin tabel sesuai guide: jumlah tabel & kolom ngikutin guide.
+## 🎯 Concept
+The user drags & drops a GUIDE file (PDF/image explaining how to process data: formulas, rounding,
+table format) + 1 raw DATA file (.xlsx/.csv, e.g. experiment results), presses Enter,
+and the app returns tables following the guide: the number of tables & columns follows the guide.
 
-Folder project: DATA-PROCESSOR/ (backend/ + frontend/).
-Panduan lengkap + semua kode ada di file GUIDE.md di root project. Baca dulu.
+Project folder: DATA-PROCESSOR/ (backend/ + frontend/).
+The full guide + all the code is in the GUIDE.md file at the project root. Read it first.
 
-## 👤 Tentang gua
-- Pemula fullstack, belajar paling enak lewat project langsung
-- Arch Linux, shell fish, pakai uv buat Python
-- Laptop cuma CPU (Intel, RAM 11,5 GB): model lokal ≥ 8B kehabisan RAM
-- Mau paham dan bisa maintain app ini. Jangan vibe coding.
+## 👤 About me
+- Fullstack beginner, learn best through hands-on projects
+- Arch Linux, fish shell, using uv for Python
+- CPU-only laptop (Intel, 11.5 GB RAM): local models ≥ 8B run out of RAM
+- I want to understand and be able to maintain this app. No vibe coding.
 
-## 🧠 Arsitektur (udah diputusin)
-- LLM: Ollama, nama model di .env. Sekarang LOKAL `qwen3-vl:2b-instruct`
-  (LLM_NUM_CTX=8192, LLM_THINK=false), nanti pindah ke `glm-5.3-flash:cloud`.
-  LLM cuma bikin RENCANA JSON, yang ngitung pandas lewat daftar op di operations.py
+## 🧠 Architecture (already decided)
+- LLM: Ollama, model name in .env. Right now LOCAL `qwen3-vl:2b-instruct`
+  (LLM_NUM_CTX=8192, LLM_THINK=false), moving to `glm-5.3-flash:cloud` later.
+  The LLM only makes a JSON PLAN, pandas does the calculating through the list of ops in operations.py
   (compute, filter, select, rename, sort, round, group_agg, aggregate, linear_fit).
-  Rumus divalidasi pakai ast.
-- Backend: uv, Python 3.12, src/data_agent/, FastAPI + Inngest (5 step:
+  Formulas are validated with ast.
+- Backend: uv, Python 3.12, src/data_agent/, FastAPI + Inngest (5 steps:
   load_inputs → extract_instructions → make_plan → run_plan → review),
-  Pydantic di custom_types.py, semua panggilan LLM lewat llm.py, prompt di prompts.py
+  Pydantic in custom_types.py, all LLM calls go through llm.py, prompts in prompts.py
 - Frontend: Vite + React + TypeScript, Tailwind, shadcn/ui, TanStack Query (polling),
-  TanStack Table v9, react-dropzone. React cuma ngobrol sama FastAPI, gak ke Inngest.
-- Qdrant ditunda sampai alur dasar jalan.
+  TanStack Table v9, react-dropzone. React only talks to FastAPI, never to Inngest.
+- Qdrant is postponed until the basic flow works.
 
-## 🧭 Aturan kerja (WAJIB)
-1. Satu langkah per balasan. Kodenya LU yang tulis lengkap, tapi bertahap.
-2. Tiap langkah: 💡 konsep singkat → 🧩 kode lengkap + komentar → ✅ cara ngecek.
-3. Berhenti dan tunggu sampai gua bilang "lanjut" atau kirim hasil/error.
-   Kalau gua kirim error, review dulu sebelum lanjut.
-4. Penjelasan simpel, satu ide per bagian, jangan paragraf panjang.
-5. Mau ubah keputusan arsitektur di atas? Kasih alasan + alternatif, tanya gua dulu.
+## 🧭 Working rules (REQUIRED)
+1. One step per reply. YOU write the full code, but in stages.
+2. Each step: 💡 short concept → 🧩 full code + comments → ✅ how to check.
+3. Stop and wait until I say "continue" or send a result/error.
+   If I send an error, review it first before continuing.
+4. Simple explanations, one idea per section, no long paragraphs.
+5. Want to change an architecture decision above? Give reasons + alternatives, ask me first.
 
-## 🔧 Maintenance (jaga terus)
-- uv.lock & package-lock.json di-commit, .env gak di-commit
-- tiap fitur baru ada test-nya (uv run pytest)
-- tiap ubah prompt/model: jalanin uv run data-agent-eval
-- types.ts di frontend harus sama dengan custom_types.py
+## 🔧 Maintenance (keep doing this)
+- uv.lock & package-lock.json are committed, .env is not committed
+- every new feature has a test (uv run pytest)
+- every time the prompt/model changes: run uv run data-agent-eval
+- types.ts in the frontend must match custom_types.py
 
-## ▶️ Sekarang
-[tulis lagi di langkah berapa / mau ngapain]
+## ▶️ Now
+[write which step I'm on / what I want to do]
 ````
 
 ---
 
 # C. Dependencies
 
-## C1. Tools di komputer
+## C1. Tools on your computer
 
-| Tool | Buat apa | Install (Arch) |
+| Tool | What it's for | Install (Arch) |
 |---|---|---|
-| `uv` | ngatur project & package Python | `sudo pacman -S uv` |
-| `nodejs` + `npm` | frontend React + Inngest dev server | `sudo pacman -S nodejs npm` |
-| `ollama` | server model AI lokal | `sudo pacman -S ollama-cuda` (NVIDIA) / `ollama-rocm` (AMD) / `ollama` (CPU) |
+| `uv` | manages the Python project & packages | `sudo pacman -S uv` |
+| `nodejs` + `npm` | React frontend + Inngest dev server | `sudo pacman -S nodejs npm` |
+| `ollama` | local AI model server | `sudo pacman -S ollama-cuda` (NVIDIA) / `ollama-rocm` (AMD) / `ollama` (CPU) |
 | `git` | version control | `sudo pacman -S git` |
 
 ## C2. Backend (Python)
 
-| Package | Buat apa |
+| Package | What it's for |
 |---|---|
-| `ollama` | client Python buat manggil model |
-| `python-dotenv` | baca file `.env` |
-| `pydantic` | bentuk data + validasi (otomatis ikut FastAPI) |
-| `pymupdf` | ambil teks PDF + render halaman scan jadi gambar |
-| `pandas` | ngolah tabel / ngitung rumus |
-| `numpy` | regresi linear (`linear_fit`) |
-| `openpyxl` | biar pandas bisa baca & tulis `.xlsx` |
-| `fastapi` | server API |
-| `uvicorn` | yang ngejalanin server FastAPI |
-| `python-multipart` | wajib ada biar FastAPI bisa nerima upload file |
-| `inngest` | step-step proses di background + dashboard |
-| `httpx` | nanya status job ke Inngest |
+| `ollama` | Python client for calling the model |
+| `python-dotenv` | reads the `.env` file |
+| `pydantic` | data shapes + validation (comes with FastAPI automatically) |
+| `pymupdf` | extracts PDF text + renders scanned pages to images |
+| `pandas` | processes tables / calculates formulas |
+| `numpy` | linear regression (`linear_fit`) |
+| `openpyxl` | lets pandas read & write `.xlsx` |
+| `fastapi` | API server |
+| `uvicorn` | runs the FastAPI server |
+| `python-multipart` | required so FastAPI can accept file uploads |
+| `inngest` | background process steps + dashboard |
+| `httpx` | asks Inngest for job status |
 | `pytest` *(dev)* | testing |
 
 ## C3. Frontend (npm)
 
-| Package | Buat apa |
+| Package | What it's for |
 |---|---|
-| `react`, `vite`, `typescript` | kerangka app (dari template Vite) |
+| `react`, `vite`, `typescript` | app skeleton (from the Vite template) |
 | `tailwindcss`, `@tailwindcss/vite` | styling |
-| shadcn/ui (`button`, `card`, `table`, `badge`, `alert`) | komponen siap pakai, kodenya masuk ke project lu |
-| `@tanstack/react-query` | kirim job + polling status |
-| `@tanstack/react-table` (v9) | tabel hasil yang bisa di-sort |
-| `react-dropzone` | drag & drop file |
-| `lucide-react` | ikon (ikut ke-install waktu `shadcn init`) |
-| `@types/node` *(dev)* | biar `vite.config.ts` kenal modul `node:path` |
+| shadcn/ui (`button`, `card`, `table`, `badge`, `alert`) | ready-made components, the code is copied into your project |
+| `@tanstack/react-query` | submitting the job + status polling |
+| `@tanstack/react-table` (v9) | sortable result tables |
+| `react-dropzone` | drag & drop files |
+| `lucide-react` | icons (installed along with `shadcn init`) |
+| `@types/node` *(dev)* | so `vite.config.ts` recognizes the `node:path` module |
 
 ---
 
-# D. Struktur folder akhir
+# D. Final folder structure
 
 ```
 DATA-PROCESSOR/
-├─ GUIDE.md                    ← file ini
+├─ GUIDE.md                    ← this file
 ├─ README.md
 ├─ backend/
 │  ├─ .env / .env.example
 │  ├─ .gitignore
 │  ├─ pyproject.toml / uv.lock / .python-version
-│  ├─ playground/              ← tempat nyoba-nyoba, bukan bagian app
+│  ├─ playground/              ← place for experiments, not part of the app
 │  │  ├─ try_ask.py
 │  │  └─ try_structured.py
 │  ├─ samples/
-│  │  ├─ make_bandul.py        ← bikin sample bandul
-│  │  └─ bandul/  guide.pdf  data.xlsx  expected.json
+│  │  ├─ make_pendulum.py      ← builds the pendulum sample
+│  │  └─ pendulum/  guide.pdf  data.xlsx  expected.json
 │  ├─ src/data_agent/
 │  │  ├─ __init__.py
-│  │  ├─ config.py             ← baca .env
-│  │  ├─ custom_types.py       ← bentuk data (Pydantic)
-│  │  ├─ llm.py                ← satu-satunya yang manggil model
-│  │  ├─ doc_loader.py         ← baca guide & Excel
-│  │  ├─ operations.py         ← daftar op pandas + validasi rumus
-│  │  ├─ executor.py           ← jalanin rencana
-│  │  ├─ prompts.py            ← semua prompt
-│  │  ├─ pipeline.py           ← 5 tahap proses (fungsi biasa)
-│  │  ├─ cli.py                ← jalanin dari terminal
-│  │  ├─ evaluate.py           ← cek semua sample
-│  │  ├─ jobs.py               ← status job + export Excel
+│  │  ├─ config.py             ← reads .env
+│  │  ├─ custom_types.py       ← data shapes (Pydantic)
+│  │  ├─ llm.py                ← the only thing that calls the model
+│  │  ├─ doc_loader.py         ← reads the guide & Excel
+│  │  ├─ operations.py         ← list of pandas ops + formula validation
+│  │  ├─ executor.py           ← runs the plan
+│  │  ├─ prompts.py            ← all prompts
+│  │  ├─ pipeline.py           ← 5 process stages (plain functions)
+│  │  ├─ cli.py                ← run from the terminal
+│  │  ├─ evaluate.py           ← checks all samples
+│  │  ├─ jobs.py               ← job status + Excel export
 │  │  └─ main.py               ← FastAPI + Inngest
 │  └─ tests/
 │     ├─ conftest.py
@@ -255,95 +255,95 @@ DATA-PROCESSOR/
 │     ├─ test_pipeline.py  test_api.py  test_jobs.py  test_inngest_function.py
 └─ frontend/
    ├─ .env / .env.example
-   ├─ components.json          ← dibikin shadcn
+   ├─ components.json          ← created by shadcn
    ├─ vite.config.ts / tsconfig*.json / package.json / package-lock.json
    └─ src/
       ├─ main.tsx / App.tsx / index.css
       ├─ api/       types.ts  client.ts  files.ts
       ├─ hooks/     useJob.ts
-      ├─ lib/       utils.ts   ← dibikin shadcn
+      ├─ lib/       utils.ts   ← created by shadcn
       └─ components/
          ├─ FileDropzone.tsx  ResultTable.tsx  ReviewList.tsx
-         └─ ui/     ← dibikin shadcn (button, card, table, badge, alert)
+         └─ ui/     ← created by shadcn (button, card, table, badge, alert)
 ```
 
 ---
 # E. Part 1: Backend (AI Agent)
 
-## Langkah 0: Setup tools
+## Step 0: Set up tools
 
-🎯 **Tujuan:** semua tools ke-install, model ke-download, server Ollama nyala.
+🎯 **Goal:** all tools installed, model downloaded, Ollama server running.
 
-💡 **Konsep:** Ollama jalan sebagai **server di background**. Terminal & kode Python cuma "ngobrol" sama server itu:
+💡 **Concept:** Ollama runs as a **background server**. The terminal & Python code just "talk" to that server:
 
 ```
-kode Python → Ollama server (localhost:11434) → model qwen3-vl di GPU/CPU lu
+Python code → Ollama server (localhost:11434) → qwen3-vl model on your GPU/CPU
 ```
 
-🧩 **Perintah:**
+🧩 **Commands:**
 
 ```fish
-# 1. cek GPU: buat milih ukuran model
+# 1. check the GPU: to choose the model size
 lspci | grep -iE 'vga|3d'
-nvidia-smi          # kalau NVIDIA: lihat kolom Memory (VRAM)
-free -h             # kalau cuma CPU: lihat RAM yang "available"
+nvidia-smi          # if NVIDIA: look at the Memory column (VRAM)
+free -h             # if CPU only: look at "available" RAM
 
-# 2. install tools (pilih SATU package ollama sesuai GPU)
+# 2. install tools (pick ONE ollama package for your GPU)
 sudo pacman -S uv nodejs npm git
 sudo pacman -S ollama-cuda      # NVIDIA
 # sudo pacman -S ollama-rocm    # AMD
-# sudo pacman -S ollama         # CPU aja
+# sudo pacman -S ollama         # CPU only
 
-# 3. nyalain server ollama (otomatis nyala tiap boot)
+# 3. start the ollama server (starts automatically on every boot)
 sudo systemctl enable --now ollama
 
-# 4. download model + tes (ganti nama model sesuai tabel di bawah)
+# 4. download the model + test it (change the model name per the table below)
 ollama pull qwen3-vl:8b
-ollama run qwen3-vl:8b "halo, jawab dalam satu kalimat"
+ollama run qwen3-vl:8b "hello, answer in one sentence"
 ```
 
-Pilih ukuran model:
+Pick the model size:
 
 | VRAM | Model |
 |---|---|
 | ≥ 8 GB | `qwen3-vl:8b` ⭐ |
 | 4–6 GB | `qwen3-vl:4b` |
-| < 4 GB / CPU | `qwen3-vl:2b-instruct` (lambat) |
+| < 4 GB / CPU | `qwen3-vl:2b-instruct` (slow) |
 
-> 🔄 **Kalau cuma CPU:** pakai versi `-instruct` (bukan `-thinking`): model "mikir" nulis ratusan token dulu sebelum jawab, dan di CPU tiap token mahal.
-> Tambahin juga `LLM_NUM_CTX=8192` dan `LLM_THINK=false` di `.env` (Langkah 1).
-> Contoh nyata: laptop Intel tanpa GPU, RAM 11,5 GB → `qwen3-vl:8b` dengan konteks 16384 **dibunuh kernel (OOM)**, model 1B cuma ~2,7 token/detik.
+> 🔄 **If CPU only:** use the `-instruct` version (not `-thinking`): a "thinking" model writes hundreds of tokens before answering, and on CPU every token is expensive.
+> Also add `LLM_NUM_CTX=8192` and `LLM_THINK=false` to `.env` (Step 1).
+> Real example: Intel laptop without a GPU, 11.5 GB RAM → `qwen3-vl:8b` with a 16384 context was **killed by the kernel (OOM)**, and a 1B model only managed ~2.7 tokens/second.
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv --version; node --version; npm --version; ollama --version
 curl http://localhost:11434      # → Ollama is running
-ollama list                      # → ada model yang lu pull
-ollama ps                        # (waktu model kebuka) kolom PROCESSOR: 100% GPU = mantap
+ollama list                      # → the model you pulled is listed
+ollama ps                        # (while the model is loaded) PROCESSOR column: 100% GPU = great
 ```
 
 ---
 
-## Langkah 1: Init project backend
+## Step 1: Init the backend project
 
-🎯 **Tujuan:** kerangka project Python pakai `uv`.
+🎯 **Goal:** the Python project skeleton using `uv`.
 
-💡 **Konsep:** isi project uv:
+💡 **Concept:** what's inside a uv project:
 
 ```
-pyproject.toml   → daftar dependency yang lu minta
-uv.lock          → versi PASTI semua package (dikunci, di-commit)
-.venv/           → tempat package di-install (gak di-commit)
-src/data_agent/  → kode lu
+pyproject.toml   → the list of dependencies you asked for
+uv.lock          → the EXACT versions of all packages (locked, committed)
+.venv/           → where packages are installed (not committed)
+src/data_agent/  → your code
 ```
 
-`uv run ...` otomatis pakai `.venv`, jadi **gak perlu activate**.
+`uv run ...` automatically uses `.venv`, so **no need to activate** it.
 
-🧩 **Perintah:**
+🧩 **Commands:**
 
 ```fish
-cd ~/Projects/"AI APPS"          # sesuaiin sama lokasi lu
+cd ~/Projects/"AI APPS"          # adjust to your location
 mkdir -p DATA-PROCESSOR/backend
 cd DATA-PROCESSOR/backend
 
@@ -352,59 +352,59 @@ uv add ollama python-dotenv pymupdf pandas numpy openpyxl fastapi uvicorn python
 uv add --dev pytest
 ```
 
-| Flag | Artinya |
+| Flag | Meaning |
 |---|---|
-| `--package` | layout `src/`, sama kayak RAG-PDF |
-| `--name data-agent` | folder kodenya jadi `src/data_agent/` |
-| `--python 3.12` | kalau belum ada, uv download sendiri |
-| `--vcs none` | jangan bikin git di sini (git-nya satu aja di `DATA-PROCESSOR/`) |
+| `--package` | `src/` layout, same as RAG-PDF |
+| `--name data-agent` | the code folder becomes `src/data_agent/` |
+| `--python 3.12` | if it's not installed, uv downloads it itself |
+| `--vcs none` | don't create a git repo here (there's only one git repo, in `DATA-PROCESSOR/`) |
 
-> ⚠️ Karena `--vcs none`, uv **gak** bikin `.gitignore`. Kita bikin manual di bawah.
+> ⚠️ Because of `--vcs none`, uv does **not** create a `.gitignore`. We create it manually below.
 
-Bikin `backend/.gitignore`:
+Create `backend/.gitignore`:
 
 ```gitignore
-# file sampah python
+# python junk files
 __pycache__/
 *.py[oc]
 .pytest_cache/
 
-# tempat package di-install, bisa dibikin ulang pakai `uv sync`
+# where packages are installed, can be recreated with `uv sync`
 .venv/
 
-# rahasia & setting lokal
+# secrets & local settings
 .env
 
-# file yang di-upload user (bisa berisi data pribadi)
+# files uploaded by users (may contain personal data)
 uploads/
 ```
 
-Bikin `backend/.env` (setting asli, **gak** di-commit). Nama model sesuaiin sama pilihan di Langkah 0:
+Create `backend/.env` (the real settings, **not** committed). Adjust the model name to your choice in Step 0:
 
 ```fish
 printf 'OLLAMA_HOST=http://localhost:11434\nLLM_MODEL=qwen3-vl:8b\n' > .env
 ```
 
-> Fish gak punya `<<EOF` kayak bash, jadi `printf` dipakai buat nulis beberapa baris (`\n` = ganti baris).
+> Fish has no `<<EOF` like bash, so `printf` is used to write multiple lines (`\n` = newline).
 
-🔄 Versi buat laptop yang cuma CPU (yang dipakai sekarang):
+🔄 Version for a CPU-only laptop (the one in use now):
 
 ```fish
 printf 'OLLAMA_HOST=http://localhost:11434\nLLM_MODEL=qwen3-vl:2b-instruct\nLLM_NUM_CTX=8192\nLLM_THINK=false\n' > .env
 ```
 
-Bikin `backend/.env.example` (contoh lengkap semua setting, **di-commit**):
+Create `backend/.env.example` (a full example of all settings, **committed**):
 
 ```bash
 # --- LLM ---
 OLLAMA_HOST=http://localhost:11434
 LLM_MODEL=qwen3-vl:8b
-# panjang konteks; turunin (misal 8192) kalau GPU kehabisan memori
+# context length; lower it (e.g. 8192) if the GPU runs out of memory
 LLM_NUM_CTX=16384
-# isi "false" kalau model kelamaan "mikir"
+# set to "false" if the model "thinks" too long
 LLM_THINK=
 
-# --- dokumen ---
+# --- documents ---
 MAX_GUIDE_PAGES=20
 MAX_UPLOAD_MB=20
 UPLOAD_DIR=uploads
@@ -414,13 +414,13 @@ INNGEST_API_BASE=http://127.0.0.1:8288/v1
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-Edit `pyproject.toml`, jadiin persis kayak gini. Yang berubah: `description`, bagian `[project.scripts]` (2 perintah), dan `[tool.pytest.ini_options]`. Angka versi (di `dependencies` dan `build-system`) boleh beda, ikutin punya lu:
+Edit `pyproject.toml` to look exactly like this. What changed: `description`, the `[project.scripts]` section (2 commands), and `[tool.pytest.ini_options]`. The version numbers (in `dependencies` and `build-system`) may differ, follow yours:
 
 ```toml
 [project]
 name = "data-agent"
 version = "0.1.0"
-description = "Agent yang ngubah data mentah jadi tabel sesuai guide"
+description = "Agent that turns raw data into tables following a guide"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -454,51 +454,51 @@ dev = [
 testpaths = ["tests"]
 ```
 
-Ganti isi `src/data_agent/__init__.py` jadi satu baris komentar aja:
+Replace the contents of `src/data_agent/__init__.py` with a single comment line:
 
 ```python
-# data_agent: agent yang ngubah data mentah jadi tabel sesuai guide
+# data_agent: agent that turns raw data into tables following a guide
 ```
 
-> Kenapa dikosongin? `uv init` naruh fungsi `main()` di sini. Fungsi itu kita pindah ke `cli.py` (Langkah 12), biar namanya gak bentrok sama file `main.py` (server).
+> Why empty it? `uv init` puts a `main()` function here. We move that function to `cli.py` (Step 12), so the name doesn't clash with the `main.py` file (the server).
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
-ls -a                 # ada .env .env.example .gitignore pyproject.toml uv.lock .venv src
-uv run python -c "import ollama, pandas, fastapi, inngest, pymupdf; print('semua package oke')"
+ls -a                 # you should see .env .env.example .gitignore pyproject.toml uv.lock .venv src
+uv run python -c "import ollama, pandas, fastapi, inngest, pymupdf; print('all packages OK')"
 ```
 
 ---
 
-## Langkah 2: `config.py`: satu pintu buat `.env`
+## Step 2: `config.py`: one door for `.env`
 
-🎯 **Tujuan:** semua setting dibaca di satu tempat.
+🎯 **Goal:** all settings are read in one place.
 
-💡 **Konsep:**
+💡 **Concept:**
 
 ```python
-os.getenv('OLLAMA_HOST', 'http://localhost:11434')  # gak ada? pakai default
-os.environ['LLM_MODEL']                              # gak ada? langsung CRASH
+os.getenv('OLLAMA_HOST', 'http://localhost:11434')  # missing? use the default
+os.environ['LLM_MODEL']                              # missing? CRASH right away
 ```
 
-Crash itu **bagus** buat setting wajib: mending error jelas di awal daripada app diam-diam pakai model yang salah.
+Crashing is **good** for required settings: better a clear error at startup than the app quietly using the wrong model.
 
-🧩 Bikin `src/data_agent/config.py`:
+🧩 Create `src/data_agent/config.py`:
 
 ```python
-# config.py: satu-satunya file yang baca .env
-# file lain cukup: from data_agent import config
+# config.py: the only file that reads .env
+# every other file just does: from data_agent import config
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()  # cari file .env, masukin isinya ke environment variable
+load_dotenv()  # find the .env file and load its contents into environment variables
 
 
 def _optional_bool(name: str) -> bool | None:
-    # "true"/"false" -> True/False, kosong -> None (biarin ollama pakai default model)
+    # "true"/"false" -> True/False, empty -> None (let ollama use the model default)
     value = os.getenv(name, '').strip().lower()
     if value in ('true', '1', 'yes'):
         return True
@@ -509,11 +509,11 @@ def _optional_bool(name: str) -> bool | None:
 
 # --- LLM ---
 OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-LLM_MODEL = os.environ['LLM_MODEL']  # wajib: kalau gak ada, crash dari awal
-LLM_NUM_CTX = int(os.getenv('LLM_NUM_CTX', '16384'))  # panjang konteks (token)
-LLM_THINK = _optional_bool('LLM_THINK')  # matiin "mode mikir" kalau kelamaan: LLM_THINK=false
+LLM_MODEL = os.environ['LLM_MODEL']  # required: crash right away if it's missing
+LLM_NUM_CTX = int(os.getenv('LLM_NUM_CTX', '16384'))  # context length (tokens)
+LLM_THINK = _optional_bool('LLM_THINK')  # turn off "thinking mode" if it's too slow: LLM_THINK=false
 
-# --- dokumen ---
+# --- documents ---
 MAX_GUIDE_PAGES = int(os.getenv('MAX_GUIDE_PAGES', '20'))
 MAX_UPLOAD_MB = int(os.getenv('MAX_UPLOAD_MB', '20'))
 UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', 'uploads')).resolve()
@@ -523,40 +523,40 @@ INNGEST_API_BASE = os.getenv('INNGEST_API_BASE', 'http://127.0.0.1:8288/v1')
 FRONTEND_ORIGIN = os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run python -c "from data_agent import config; print(config.LLM_MODEL, config.UPLOAD_DIR)"
 ```
 
-Harus muncul nama model lu + `/.../backend/uploads`. Coba hapus baris `LLM_MODEL` dari `.env` → harus `KeyError: 'LLM_MODEL'`. Habis itu balikin lagi.
+Your model name + `/.../backend/uploads` should appear. Try deleting the `LLM_MODEL` line from `.env` → you should get `KeyError: 'LLM_MODEL'`. Then put it back.
 
 ---
 
-## Langkah 3: `llm.py`: satu-satunya pintu ke model
+## Step 3: `llm.py`: the only door to the model
 
-🎯 **Tujuan:** bisa manggil model dari Python, sambil nyatat token & kecepatan.
+🎯 **Goal:** be able to call the model from Python, while logging tokens & speed.
 
-💡 **Konsep 1:** semua file lain manggil model **lewat `llm.py`**. Mau ganti model / provider / nambah retry? Cukup ubah file ini.
+💡 **Concept 1:** every other file calls the model **through `llm.py`**. Want to change the model / provider / add retries? Just change this file.
 
-💡 **Konsep 2:** respons Ollama isinya lebih dari jawaban:
+💡 **Concept 2:** Ollama's response contains more than the answer:
 
 ```python
-res.message.content     # teks jawaban
-res.prompt_eval_count   # token INPUT
-res.eval_count          # token OUTPUT
-res.total_duration      # waktu dalam NANOdetik (÷ 1e9 = detik)
+res.message.content     # the answer text
+res.prompt_eval_count   # INPUT tokens
+res.eval_count          # OUTPUT tokens
+res.total_duration      # time in NANOseconds (÷ 1e9 = seconds)
 ```
 
-💡 **Konsep 3:** `logging` > `print`: tiap baris otomatis ada waktu, level, dan nama file asalnya.
+💡 **Concept 3:** `logging` > `print`: every line automatically has the time, level, and name of the file it came from.
 
-💡 **Konsep 4:** `structured()` maksa model jawab sesuai **schema Pydantic** (`format=`), terus hasilnya divalidasi. Kalau JSON-nya salah, kesalahannya dikasih tau ke model dan diminta ulang.
+💡 **Concept 4:** `structured()` forces the model to answer according to a **Pydantic schema** (`format=`), then validates the result. If the JSON is wrong, the model is told what was wrong and asked again.
 
-🧩 Bikin `src/data_agent/llm.py`:
+🧩 Create `src/data_agent/llm.py`:
 
 ```python
-# llm.py: satu-satunya file yang ngobrol sama model
-# mau ganti model/provider? cukup ubah file ini
+# llm.py: the only file that talks to the model
+# want to switch model/provider? just change this file
 import logging
 from typing import TypeVar
 
@@ -566,44 +566,44 @@ from pydantic import BaseModel, ValidationError
 from data_agent import config
 
 logger = logging.getLogger(__name__)
-client = Client(host=config.OLLAMA_HOST)  # sambungan ke server ollama
+client = Client(host=config.OLLAMA_HOST)  # connection to the ollama server
 
 T = TypeVar('T', bound=BaseModel)
-MAX_FORMAT_RETRIES = 2  # kalau JSON dari model gak sesuai schema, coba ulang segini kali
+MAX_FORMAT_RETRIES = 2  # if the model's JSON doesn't match the schema, retry this many times
 
 
 def _chat(messages: list[dict], schema: dict | None, label: str) -> str:
     res = client.chat(
         model=config.LLM_MODEL,
         messages=messages,
-        format=schema,                    # paksa jawaban sesuai JSON schema
-        think=config.LLM_THINK,           # None = default model
+        format=schema,                    # force the answer to match the JSON schema
+        think=config.LLM_THINK,           # None = model default
         options={
-            'temperature': 0,             # 0 = jawaban paling konsisten
+            'temperature': 0,             # 0 = most consistent answers
             'num_ctx': config.LLM_NUM_CTX,
         },
     )
-    # ollama ngitung waktu dalam NANOdetik -> dibagi 1e9 jadi detik
+    # ollama reports time in NANOseconds -> divide by 1e9 to get seconds
     seconds = (res.total_duration or 0) / 1e9
     tps = (res.eval_count or 0) / ((res.eval_duration or 1) / 1e9)
     logger.info(
-        '[%s] model=%s input=%s output=%s waktu=%.1fs speed=%.1f tok/s',
+        '[%s] model=%s input=%s output=%s time=%.1fs speed=%.1f tok/s',
         label, config.LLM_MODEL, res.prompt_eval_count, res.eval_count, seconds, tps,
     )
     return res.message.content
 
 
 def ask(prompt: str) -> str:
-    # jawaban teks biasa
+    # plain text answer
     return _chat([{'role': 'user', 'content': prompt}], schema=None, label='ask')
 
 
 def structured(prompt: str, schema: type[T], images: list[str] | None = None,
                label: str = 'llm') -> T:
-    # jawaban berbentuk Pydantic model (schema)
+    # answer as a Pydantic model (schema)
     message: dict = {'role': 'user', 'content': prompt}
     if images:
-        message['images'] = images  # path gambar, ollama yang baca filenya
+        message['images'] = images  # image paths, ollama reads the files itself
     messages = [message]
 
     for attempt in range(1, MAX_FORMAT_RETRIES + 2):
@@ -611,21 +611,21 @@ def structured(prompt: str, schema: type[T], images: list[str] | None = None,
         try:
             return schema.model_validate_json(content)
         except ValidationError as e:
-            logger.warning('[%s] output gak sesuai schema (percobaan %s): %s', label, attempt, e)
-            # kasih tau model kesalahannya, terus minta ulang
+            logger.warning('[%s] output does not match schema (attempt %s): %s', label, attempt, e)
+            # tell the model what was wrong, then ask again
             messages = [
                 message,
                 {'role': 'assistant', 'content': content},
                 {'role': 'user', 'content': f'Your JSON was invalid:\n{e}\nReturn corrected JSON only.'},
             ]
-    raise ValueError(f'[{label}] model gagal ngasih JSON yang valid')
+    raise ValueError(f'[{label}] model failed to give valid JSON')
 ```
 
-Bikin folder buat nyoba-nyoba (`mkdir playground`), terus bikin `playground/try_ask.py`:
+Create a folder for experiments (`mkdir playground`), then create `playground/try_ask.py`:
 
 ```python
-# try_ask.py: tes pertama ngobrol sama model (bukan bagian app, cuma buat nyoba)
-# jalanin: uv run python playground/try_ask.py
+# try_ask.py: first test of chatting with the model (not part of the app, just for trying things out)
+# run: uv run python playground/try_ask.py
 import logging
 
 from data_agent import config, llm
@@ -635,82 +635,82 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 print('host :', config.OLLAMA_HOST)
 print('model:', config.LLM_MODEL)
-print(llm.ask('Sebutkan rumus periode bandul sederhana dalam satu baris'))
+print(llm.ask('State the formula for the period of a simple pendulum in one line'))
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run python playground/try_ask.py
-uv run python playground/try_ask.py     # jalanin 2x
+uv run python playground/try_ask.py     # run it twice
 ```
 
-Hasil yang diharapkan, kurang lebih:
+Expected result, roughly:
 
 ```
 host : http://localhost:11434
 model: qwen3-vl:8b
-2026-10-18 05:00:12 INFO data_agent.llm: [ask] model=qwen3-vl:8b input=24 output=31 waktu=2.3s speed=35.2 tok/s
+2026-10-18 05:00:12 INFO data_agent.llm: [ask] model=qwen3-vl:8b input=24 output=31 time=2.3s speed=35.2 tok/s
 T = 2π √(L/g)
 ```
 
-| `speed` | Artinya |
+| `speed` | Meaning |
 |---|---|
-| ≥ 20 tok/s | jalan di GPU 👍 |
-| 5–20 | sebagian tumpah ke CPU |
-| < 5 | full CPU → pertimbangin model yang lebih kecil, atau Ollama cloud |
+| ≥ 20 tok/s | running on the GPU 👍 |
+| 5–20 | partly spilling over to the CPU |
+| < 5 | full CPU → consider a smaller model, or Ollama cloud |
 
-Run pertama lebih lama karena model harus dimuat ke GPU/RAM dulu.
+The first run takes longer because the model has to be loaded into the GPU/RAM first.
 
 ---
 
-## Langkah 4: `custom_types.py`: bentuk data antar step
+## Step 4: `custom_types.py`: data shapes between steps
 
-🎯 **Tujuan:** semua data yang lewat antar step punya bentuk yang jelas.
+🎯 **Goal:** all data passed between steps has a clear shape.
 
-💡 **Konsep:** Pydantic = "satpam" data. Kalau LLM ngasih JSON yang bentuknya salah, langsung ketahuan di sini, bukan nanti di tengah perhitungan.
+💡 **Concept:** Pydantic = the data "security guard". If the LLM gives JSON with the wrong shape, it's caught right here, not later in the middle of a calculation.
 
-Urutan model-nya ngikutin alur proses:
+The models follow the process flow in order:
 
 ```
 InputBundle → Instructions → Plan (TablePlan → Step) → ResultTable → Review → JobResult
 ```
 
-💡 Kenapa `Step` cuma **satu model** dengan banyak field opsional (bukan satu model per op)? Schema JSON-nya jadi simpel, lebih gampang diikutin model lokal yang kecil. Parameter wajib per op dicek di `operations.py`.
+💡 Why is `Step` just **one model** with many optional fields (instead of one model per op)? The JSON schema stays simple, easier for a small local model to follow. The required parameters per op are checked in `operations.py`.
 
-🧩 Bikin `src/data_agent/custom_types.py`:
+🧩 Create `src/data_agent/custom_types.py`:
 
 ```python
-# custom_types.py: "bentuk" data yang lewat antar step
-# Pydantic ngecek bentuknya otomatis, jadi data yang salah langsung ketahuan
+# custom_types.py: the "shape" of the data passed between steps
+# Pydantic checks the shape automatically, so bad data is caught right away
 from typing import Any, Literal
 
 from pydantic import BaseModel
 
 
-# ---------- 1. input yang udah dibaca ----------
+# ---------- 1. input after reading ----------
 class SheetSummary(BaseModel):
-    name: str                      # nama sheet di Excel
-    columns: list[str]             # nama kolom (udah dirapihin, lihat doc_loader)
-    dtypes: dict[str, str]         # tipe data tiap kolom
+    name: str                      # sheet name in the Excel file
+    columns: list[str]             # column names (already cleaned up, see doc_loader)
+    dtypes: dict[str, str]         # data type of each column
     n_rows: int
-    sample_rows: list[dict[str, Any]]  # beberapa baris contoh buat LLM
+    sample_rows: list[dict[str, Any]]  # a few example rows for the LLM
 
 
 class InputBundle(BaseModel):
-    guide_text: str                # teks dari guide (PDF)
-    guide_images: list[str]        # path gambar (foto guide / halaman PDF scan)
-    data_path: str                 # path file Excel/CSV
+    guide_text: str                # text from the guide (PDF)
+    guide_images: list[str]        # image paths (guide photos / scanned PDF pages)
+    data_path: str                 # path to the Excel/CSV file
     sheets: list[SheetSummary]
 
 
-# ---------- 2. hasil LLM: daftar instruksi ----------
+# ---------- 2. LLM output: list of instructions ----------
 class Instructions(BaseModel):
-    items: list[str]               # tiap instruksi di guide, satu per item
-    expected_tables: list[str]     # tabel apa aja yang diminta guide
+    items: list[str]               # each instruction in the guide, one per item
+    expected_tables: list[str]     # which tables the guide asks for
 
 
-# ---------- 3. hasil LLM: rencana proses ----------
+# ---------- 3. LLM output: processing plan ----------
 OpName = Literal[
     'compute', 'filter', 'select', 'rename', 'sort',
     'round', 'group_agg', 'aggregate', 'linear_fit',
@@ -719,9 +719,9 @@ AggFunc = Literal['mean', 'sum', 'min', 'max', 'count', 'std', 'median']
 
 
 class Aggregation(BaseModel):
-    column: str                    # kolom yang dihitung
-    func: AggFunc                  # fungsi: mean, sum, ...
-    output: str                    # nama kolom hasilnya
+    column: str                    # column to aggregate
+    func: AggFunc                  # function: mean, sum, ...
+    output: str                    # name of the resulting column
 
 
 class RenamePair(BaseModel):
@@ -730,12 +730,12 @@ class RenamePair(BaseModel):
 
 
 class Step(BaseModel):
-    # satu model buat semua op (bukan satu model per op),
-    # biar schema-nya simpel dan gampang diikutin model lokal yang kecil.
-    # parameter yang wajib per op dicek di operations.py
+    # one model for all ops (not one model per op),
+    # so the schema stays simple and easy for a small local model to follow.
+    # the required parameters per op are checked in operations.py
     op: OpName
     new_column: str | None = None          # compute
-    expr: str | None = None                # compute (rumus) / filter (kondisi)
+    expr: str | None = None                # compute (formula) / filter (condition)
     columns: list[str] | None = None       # select / round
     renames: list[RenamePair] | None = None  # rename
     by: list[str] | None = None            # sort / group_agg
@@ -747,9 +747,9 @@ class Step(BaseModel):
 
 
 class TablePlan(BaseModel):
-    id: str                        # id unik, contoh: "hasil_g"
-    title: str                     # judul yang ditampilin
-    source: str                    # nama sheet ATAU id tabel sebelumnya
+    id: str                        # unique id, e.g. "result_g"
+    title: str                     # title to display
+    source: str                    # sheet name OR the id of an earlier table
     steps: list[Step]
 
 
@@ -757,13 +757,13 @@ class Plan(BaseModel):
     tables: list[TablePlan]
 
 
-# ---------- 4. hasil akhir ----------
+# ---------- 4. final result ----------
 class ResultTable(BaseModel):
     id: str
     title: str
     columns: list[str]
     rows: list[list[Any]]
-    formulas: list[str]            # langkah/rumus yang dipakai, buat ditampilin di UI
+    formulas: list[str]            # steps/formulas used, shown in the UI
 
 
 class TableSet(BaseModel):
@@ -787,25 +787,25 @@ class JobResult(BaseModel):
     review: Review
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run python -c "from data_agent.custom_types import Plan; import json; print(json.dumps(Plan.model_json_schema())[:300])"
 ```
 
-Muncul potongan JSON schema = ini yang nanti dikirim ke model lewat `format=`.
+A snippet of the JSON schema appears = this is what will be sent to the model through `format=`.
 
 ---
 
-## Langkah 5: Tes structured output (penting!)
+## Step 5: Test structured output (important!)
 
-🎯 **Tujuan:** mastiin model lokal lu **nurut schema JSON**. Ini fondasi seluruh app.
+🎯 **Goal:** make sure your local model **follows the JSON schema**. This is the foundation of the whole app.
 
-🧩 Bikin `playground/try_structured.py`:
+🧩 Create `playground/try_structured.py`:
 
 ```python
-# try_structured.py: tes model jawab dalam bentuk JSON sesuai schema Pydantic
-# jalanin: uv run python playground/try_structured.py
+# try_structured.py: test the model answering in JSON that matches a Pydantic schema
+# run: uv run python playground/try_structured.py
 import logging
 
 from pydantic import BaseModel
@@ -816,55 +816,55 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
-class Rumus(BaseModel):
-    nama: str
-    rumus: str
-    variabel: list[str]
+class Formula(BaseModel):
+    name: str
+    formula: str
+    variables: list[str]
 
 
-hasil = llm.structured('Jelaskan rumus periode bandul sederhana.', Rumus, label='coba')
-print(type(hasil))    # <class '__main__.Rumus'>  -> udah jadi objek Python, bukan teks
-print(hasil.rumus)
-print(hasil.variabel)
+result = llm.structured('Explain the formula for the period of a simple pendulum.', Formula, label='try')
+print(type(result))    # <class '__main__.Formula'>  -> already a Python object, not text
+print(result.formula)
+print(result.variables)
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run python playground/try_structured.py
 ```
 
-Yang diharapkan: `<class '__main__.Rumus'>` + rumus + daftar variabel.
+Expected: `<class '__main__.Formula'>` + the formula + the list of variables.
 
-Kalau gagal:
-- muncul warning "output gak sesuai schema" berkali-kali → model terlalu kecil, coba model yang lebih gede atau Ollama cloud
-- lama banget → isi `LLM_THINK=false` di `.env` (matiin mode mikir)
-- `out of memory` / Ollama mati sendiri → turunin `LLM_NUM_CTX=8192` di `.env`, atau pakai model yang lebih kecil
+If it fails:
+- the warning "output does not match schema" appears many times → the model is too small, try a bigger model or Ollama cloud
+- extremely slow → set `LLM_THINK=false` in `.env` (turns off thinking mode)
+- `out of memory` / Ollama dies on its own → lower `LLM_NUM_CTX=8192` in `.env`, or use a smaller model
 
 ---
 
-## Langkah 6: `doc_loader.py` + sample pertama
+## Step 6: `doc_loader.py` + first sample
 
-🎯 **Tujuan:** baca guide (PDF/gambar) & data (Excel/CSV), plus bikin sample buat tes.
+🎯 **Goal:** read the guide (PDF/image) & data (Excel/CSV), plus build a sample for tests.
 
-💡 **Konsep 1:** halaman PDF yang teksnya dikit (hasil scan) atau ada gambarnya (misal rumus berupa gambar) **dirender jadi PNG**, biar bisa "dilihat" model vision.
+💡 **Concept 1:** PDF pages with little text (scans) or with images (e.g. a formula as an image) are **rendered to PNG**, so a vision model can "see" them.
 
-💡 **Konsep 2:** nama kolom dirapihin:
+💡 **Concept 2:** column names are cleaned up:
 
 ```
-"Panjang Tali (m)"    → "panjang_tali_m"
-"Waktu 10 Ayunan (s)" → "waktu_10_ayunan_s"
-"10 cm"               → "c_10_cm"   (gak boleh diawali angka)
+"String Length (m)"    → "string_length_m"
+"Time 10 Swings (s)"   → "time_10_swings_s"
+"10 cm"                → "c_10_cm"   (can't start with a digit)
 ```
 
-💡 **Konsep 3:** LLM cuma dikasih **5 baris contoh** + nama & tipe kolom, bukan semua data.
+💡 **Concept 3:** the LLM is only given **5 example rows** + column names & types, not all the data.
 
-🧩 Bikin `src/data_agent/doc_loader.py`:
+🧩 Create `src/data_agent/doc_loader.py`:
 
 ```python
-# doc_loader.py: baca file input
-#   guide (PDF/gambar) -> teks + gambar buat LLM
-#   data (Excel/CSV)   -> DataFrame pandas + ringkasan kolom buat LLM
+# doc_loader.py: reads the input files
+#   guide (PDF/image) -> text + images for the LLM
+#   data (Excel/CSV)  -> pandas DataFrame + column summary for the LLM
 import json
 import logging
 import re
@@ -882,13 +882,13 @@ logger = logging.getLogger(__name__)
 
 GUIDE_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'}
 DATA_EXTENSIONS = {'.xlsx', '.csv'}
-SAMPLE_ROWS = 5          # baris contoh yang dikasih ke LLM (bukan semua data!)
-MIN_TEXT_CHARS = 50      # halaman dengan teks lebih sedikit dari ini dianggap hasil scan
-RENDER_DPI = 110         # resolusi render halaman PDF jadi gambar
+SAMPLE_ROWS = 5          # example rows given to the LLM (not all the data!)
+MIN_TEXT_CHARS = 50      # pages with less text than this are treated as scans
+RENDER_DPI = 110         # resolution when rendering PDF pages to images
 
 
 def classify(filename: str) -> Literal['guide', 'data'] | None:
-    # tebak jenis file dari ekstensinya
+    # guess the file type from its extension
     ext = Path(filename).suffix.lower()
     if ext in GUIDE_EXTENSIONS:
         return 'guide'
@@ -898,12 +898,12 @@ def classify(filename: str) -> Literal['guide', 'data'] | None:
 
 
 def normalize_column(name: object) -> str:
-    # "Panjang Tali (m)" -> "panjang_tali_m"
-    # biar nama kolom aman dipakai di rumus (gak ada spasi / simbol)
+    # "String Length (m)" -> "string_length_m"
+    # so column names are safe to use in formulas (no spaces / symbols)
     text = str(name).strip().lower()
     text = re.sub(r'[^0-9a-z]+', '_', text).strip('_')
     if not text:
-        text = 'kolom'
+        text = 'column'
     if text[0].isdigit():
         text = f'c_{text}'
     return text
@@ -914,7 +914,7 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     new_names = []
     for col in df.columns:
         name = normalize_column(col)
-        if name in seen:  # nama kembar -> kasih nomor: nilai, nilai_2
+        if name in seen:  # duplicate name -> add a number: value, value_2
             seen[name] += 1
             name = f'{name}_{seen[name]}'
         else:
@@ -926,12 +926,12 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def read_data(path: str) -> dict[str, pd.DataFrame]:
-    # balikin {nama_sheet: DataFrame}; CSV dianggap satu sheet bernama "data"
+    # return {sheet_name: DataFrame}; a CSV counts as one sheet named "data"
     p = Path(path)
     if p.suffix.lower() == '.csv':
         sheets = {'data': pd.read_csv(p)}
     else:
-        sheets = pd.read_excel(p, sheet_name=None)  # None = baca semua sheet
+        sheets = pd.read_excel(p, sheet_name=None)  # None = read all sheets
     return {
         normalize_column(name): _normalize_columns(df.dropna(how='all'))
         for name, df in sheets.items()
@@ -941,7 +941,7 @@ def read_data(path: str) -> dict[str, pd.DataFrame]:
 def summarize_sheets(sheets: dict[str, pd.DataFrame]) -> list[SheetSummary]:
     summaries = []
     for name, df in sheets.items():
-        # to_json -> json.loads: cara gampang ubah tipe numpy/NaN jadi tipe JSON biasa
+        # to_json -> json.loads: easy way to turn numpy/NaN types into plain JSON types
         sample = json.loads(df.head(SAMPLE_ROWS).to_json(orient='records'))
         summaries.append(SheetSummary(
             name=name,
@@ -954,8 +954,8 @@ def summarize_sheets(sheets: dict[str, pd.DataFrame]) -> list[SheetSummary]:
 
 
 def load_guide(path: str, out_dir: Path) -> tuple[str, list[str]]:
-    # PDF -> ambil teksnya; halaman scan / bergambar ikut dirender jadi PNG
-    # gambar (foto) -> langsung dipakai
+    # PDF -> extract the text; scanned / image pages are also rendered to PNG
+    # image (photo) -> used as is
     p = Path(path)
     if p.suffix.lower() != '.pdf':
         return '', [str(p)]
@@ -965,11 +965,11 @@ def load_guide(path: str, out_dir: Path) -> tuple[str, list[str]]:
     with pymupdf.open(p) as doc:
         for i, page in enumerate(doc):
             if i >= config.MAX_GUIDE_PAGES:
-                logger.warning('guide %s dipotong di %s halaman', p.name, config.MAX_GUIDE_PAGES)
+                logger.warning('guide %s truncated at %s pages', p.name, config.MAX_GUIDE_PAGES)
                 break
             text = page.get_text().strip()
             if text:
-                texts.append(f'--- {p.name} halaman {i + 1} ---\n{text}')
+                texts.append(f'--- {p.name} page {i + 1} ---\n{text}')
             if len(text) < MIN_TEXT_CHARS or page.get_images():
                 img_path = out_dir / f'{p.stem}_page{i + 1}.png'
                 page.get_pixmap(dpi=RENDER_DPI).save(img_path)
@@ -979,7 +979,7 @@ def load_guide(path: str, out_dir: Path) -> tuple[str, list[str]]:
 
 def load_inputs(guide_paths: list[str], data_path: str, work_dir: str) -> InputBundle:
     out_dir = Path(work_dir) / 'rendered'
-    shutil.rmtree(out_dir, ignore_errors=True)  # bersihin sisa run sebelumnya (kalau di-retry)
+    shutil.rmtree(out_dir, ignore_errors=True)  # clear leftovers from the previous run (on retry)
     out_dir.mkdir(parents=True)
 
     all_text: list[str] = []
@@ -991,7 +991,7 @@ def load_inputs(guide_paths: list[str], data_path: str, work_dir: str) -> InputB
         all_images.extend(images)
 
     sheets = read_data(data_path)
-    logger.info('input: %s guide, %s gambar, sheet=%s',
+    logger.info('input: %s guide(s), %s image(s), sheets=%s',
                 len(guide_paths), len(all_images), list(sheets))
     return InputBundle(
         guide_text='\n\n'.join(all_text),
@@ -1001,17 +1001,17 @@ def load_inputs(guide_paths: list[str], data_path: str, work_dir: str) -> InputB
     )
 ```
 
-🧩 Bikin folder `samples/` dan `tests/` dulu:
+🧩 Create the `samples/` and `tests/` folders first:
 
 ```fish
 mkdir -p samples tests
 ```
 
-🧩 Bikin `samples/make_bandul.py`. Script ini bikin guide PDF, data Excel, dan **jawaban yang benar** (dihitung manual, bukan pakai app):
+🧩 Create `samples/make_pendulum.py`. This script builds a guide PDF, an Excel data file, and the **correct answer** (calculated by hand, not with the app):
 
 ```python
-# make_bandul.py: bikin sample pertama (praktikum bandul) buat tes & evaluasi
-# jalanin dari folder backend: uv run python samples/make_bandul.py
+# make_pendulum.py: builds the first sample (simple pendulum lab) for tests & evaluation
+# run from the backend folder: uv run python samples/make_pendulum.py
 import json
 import math
 from pathlib import Path
@@ -1019,41 +1019,41 @@ from pathlib import Path
 import pandas as pd
 import pymupdf
 
-OUT = Path(__file__).parent / 'bandul'
+OUT = Path(__file__).parent / 'pendulum'
 OUT.mkdir(exist_ok=True)
 
-# ---------- 1. data mentah (Excel) ----------
+# ---------- 1. raw data (Excel) ----------
 data = pd.DataFrame({
-    'Percobaan': [1, 2, 3, 4, 5],
-    'Panjang Tali (m)': [0.3, 0.5, 0.7, 0.9, 1.1],
-    'Waktu 10 Ayunan (s)': [11.02, 14.15, 16.83, 19.01, 21.10],
+    'Trial': [1, 2, 3, 4, 5],
+    'String Length (m)': [0.3, 0.5, 0.7, 0.9, 1.1],
+    'Time 10 Swings (s)': [11.02, 14.15, 16.83, 19.01, 21.10],
 })
 data.to_excel(OUT / 'data.xlsx', sheet_name='Data', index=False)
 
 # ---------- 2. guide (PDF) ----------
-GUIDE = """PANDUAN PENGOLAHAN DATA - PRAKTIKUM BANDUL SEDERHANA
+GUIDE = """DATA PROCESSING GUIDE - SIMPLE PENDULUM LAB
 
-Data mentah ada di file Excel (sheet Data).
+The raw data is in the Excel file (sheet Data).
 
-Langkah pengolahan:
-1. Hitung periode satu ayunan: T = t / 10, dengan t = waktu 10 ayunan.
-2. Hitung percepatan gravitasi: g = 4 x pi^2 x L / T^2, dengan L = panjang tali.
-3. Bulatkan T dan g ke 3 angka di belakang koma.
+Processing steps:
+1. Calculate the period of one swing: T = t / 10, where t = time for 10 swings.
+2. Calculate the gravitational acceleration: g = 4 x pi^2 x L / T^2, where L = string length.
+3. Round T and g to 3 decimal places.
 
-Tabel 1 - Hasil Perhitungan, dengan kolom berurutan:
-| Percobaan | L (m) | T (s) | g (m/s2) |
+Table 1 - Calculation Results, with columns in this order:
+| Trial | L (m) | T (s) | g (m/s2) |
 
-Tabel 2 - Ringkasan, berisi:
-- g rata-rata (dibulatkan 3 desimal)
-- persen error terhadap g literatur 9.8 m/s2:
-  error = |g rata-rata - 9.8| / 9.8 x 100 (dibulatkan 2 desimal)
+Table 2 - Summary, containing:
+- mean g (rounded to 3 decimals)
+- percent error against the literature g of 9.8 m/s2:
+  error = |mean g - 9.8| / 9.8 x 100 (rounded to 2 decimals)
 """
 doc = pymupdf.open()
 page = doc.new_page()
 page.insert_textbox(pymupdf.Rect(50, 50, 550, 800), GUIDE, fontsize=11)
 doc.save(OUT / 'guide.pdf')
 
-# ---------- 3. jawaban yang benar (dihitung manual, BUKAN pakai app) ----------
+# ---------- 3. the correct answer (calculated by hand, NOT using the app) ----------
 rows = []
 for p, L, t in data.itertuples(index=False):
     T = round(t / 10, 3)
@@ -1063,21 +1063,21 @@ g_mean = round(sum(r[3] for r in rows) / len(rows), 3)
 error = round(abs(g_mean - 9.8) / 9.8 * 100, 2)
 
 expected = {'tables': [
-    {'title': 'Hasil Perhitungan', 'columns': ['Percobaan', 'L (m)', 'T (s)', 'g (m/s2)'], 'rows': rows},
-    {'title': 'Ringkasan', 'columns': ['g rata-rata', 'error (%)'], 'rows': [[g_mean, error]]},
+    {'title': 'Calculation Results', 'columns': ['Trial', 'L (m)', 'T (s)', 'g (m/s2)'], 'rows': rows},
+    {'title': 'Summary', 'columns': ['mean g', 'error (%)'], 'rows': [[g_mean, error]]},
 ]}
 (OUT / 'expected.json').write_text(json.dumps(expected, indent=2))
-print('sample dibuat di', OUT)
+print('sample created at', OUT)
 ```
 
 ```fish
-uv run python samples/make_bandul.py
+uv run python samples/make_pendulum.py
 ```
 
-🧩 Bikin `tests/conftest.py`. File ini disiapin pytest sebelum semua test jalan, dan berisi **rencana yang benar** buat sample bandul:
+🧩 Create `tests/conftest.py`. This file is set up by pytest before any test runs, and contains the **correct plan** for the pendulum sample:
 
 ```python
-# conftest.py: disiapin pytest sebelum semua test jalan
+# conftest.py: set up by pytest before any test runs
 import os
 import subprocess
 import sys
@@ -1085,55 +1085,55 @@ from pathlib import Path
 
 import pytest
 
-# test gak butuh .env asli; config.py cuma butuh LLM_MODEL ada isinya
+# tests don't need a real .env; config.py only needs LLM_MODEL to be non-empty
 os.environ.setdefault('LLM_MODEL', 'test-model')
 
 from data_agent.custom_types import Aggregation, Plan, RenamePair, Step, TablePlan  # noqa: E402
 
 BACKEND = Path(__file__).parent.parent
-SAMPLE = BACKEND / 'samples' / 'bandul'
+SAMPLE = BACKEND / 'samples' / 'pendulum'
 
 
 @pytest.fixture(scope='session')
-def bandul_dir() -> Path:
-    # bikin file sample kalau belum ada
+def pendulum_dir() -> Path:
+    # create the sample files if they don't exist yet
     if not (SAMPLE / 'expected.json').exists():
-        subprocess.run([sys.executable, str(SAMPLE.parent / 'make_bandul.py')], check=True)
+        subprocess.run([sys.executable, str(SAMPLE.parent / 'make_pendulum.py')], check=True)
     return SAMPLE
 
 
 @pytest.fixture
-def bandul_plan() -> Plan:
-    # rencana yang BENAR untuk sample bandul (contoh jawaban ideal dari LLM)
+def pendulum_plan() -> Plan:
+    # the CORRECT plan for the pendulum sample (an ideal LLM answer)
     return Plan(tables=[
-        TablePlan(id='hasil', title='Hasil Perhitungan', source='data', steps=[
-            Step(op='compute', new_column='t_periode', expr='waktu_10_ayunan_s / 10'),
-            Step(op='compute', new_column='g', expr='4 * pi ** 2 * panjang_tali_m / t_periode ** 2'),
-            Step(op='round', columns=['t_periode', 'g'], decimals=3),
+        TablePlan(id='results', title='Calculation Results', source='data', steps=[
+            Step(op='compute', new_column='t_period', expr='time_10_swings_s / 10'),
+            Step(op='compute', new_column='g', expr='4 * pi ** 2 * string_length_m / t_period ** 2'),
+            Step(op='round', columns=['t_period', 'g'], decimals=3),
             Step(op='rename', renames=[
-                RenamePair(old='percobaan', new='Percobaan'),
-                RenamePair(old='panjang_tali_m', new='L (m)'),
-                RenamePair(old='t_periode', new='T (s)'),
+                RenamePair(old='trial', new='Trial'),
+                RenamePair(old='string_length_m', new='L (m)'),
+                RenamePair(old='t_period', new='T (s)'),
                 RenamePair(old='g', new='g (m/s2)'),
             ]),
-            Step(op='select', columns=['Percobaan', 'L (m)', 'T (s)', 'g (m/s2)']),
+            Step(op='select', columns=['Trial', 'L (m)', 'T (s)', 'g (m/s2)']),
         ]),
-        TablePlan(id='ringkasan', title='Ringkasan', source='hasil', steps=[
+        TablePlan(id='summary', title='Summary', source='results', steps=[
             Step(op='aggregate', aggregations=[
-                Aggregation(column='g (m/s2)', func='mean', output='g_rata_rata'),
+                Aggregation(column='g (m/s2)', func='mean', output='g_mean'),
             ]),
-            Step(op='round', columns=['g_rata_rata'], decimals=3),
-            Step(op='compute', new_column='error', expr='abs(g_rata_rata - 9.8) / 9.8 * 100'),
+            Step(op='round', columns=['g_mean'], decimals=3),
+            Step(op='compute', new_column='error', expr='abs(g_mean - 9.8) / 9.8 * 100'),
             Step(op='round', columns=['error'], decimals=2),
             Step(op='rename', renames=[
-                RenamePair(old='g_rata_rata', new='g rata-rata'),
+                RenamePair(old='g_mean', new='mean g'),
                 RenamePair(old='error', new='error (%)'),
             ]),
         ]),
     ])
 ```
 
-🧩 Bikin `tests/test_doc_loader.py`:
+🧩 Create `tests/test_doc_loader.py`:
 
 ```python
 import pandas as pd
@@ -1144,78 +1144,78 @@ from data_agent.doc_loader import classify, load_inputs, normalize_column, read_
 
 
 @pytest.mark.parametrize('raw, clean', [
-    ('Panjang Tali (m)', 'panjang_tali_m'),
-    ('  Waktu 10 Ayunan (s) ', 'waktu_10_ayunan_s'),
+    ('String Length (m)', 'string_length_m'),
+    ('  Time 10 Swings (s) ', 'time_10_swings_s'),
     ('10 cm', 'c_10_cm'),
-    ('%%%', 'kolom'),
+    ('%%%', 'column'),
 ])
 def test_normalize_column(raw, clean):
     assert normalize_column(raw) == clean
 
 
 def test_classify():
-    assert classify('panduan.PDF') == 'guide'
-    assert classify('foto.jpg') == 'guide'
+    assert classify('guide.PDF') == 'guide'
+    assert classify('photo.jpg') == 'guide'
     assert classify('data.xlsx') == 'data'
     assert classify('virus.exe') is None
 
 
-def test_read_data_nama_kolom_kembar(tmp_path):
+def test_read_data_duplicate_column_names(tmp_path):
     path = tmp_path / 'd.csv'
-    pd.DataFrame([[1, 2]], columns=['Nilai', 'nilai ']).to_csv(path, index=False)
+    pd.DataFrame([[1, 2]], columns=['Value', 'value ']).to_csv(path, index=False)
     sheets = read_data(str(path))
-    assert list(sheets['data'].columns) == ['nilai', 'nilai_2']
+    assert list(sheets['data'].columns) == ['value', 'value_2']
 
 
-def test_load_inputs_pdf_scan_dirender(tmp_path):
-    # halaman 1 ada teks, halaman 2 kosong (kayak hasil scan) -> halaman 2 jadi gambar
+def test_load_inputs_scanned_pdf_page_is_rendered(tmp_path):
+    # page 1 has text, page 2 is empty (like a scan) -> page 2 becomes an image
     pdf = tmp_path / 'guide.pdf'
     doc = pymupdf.open()
-    doc.new_page().insert_text((50, 72), 'Hitung rata-rata kolom nilai. ' * 5)
+    doc.new_page().insert_text((50, 72), 'Calculate the average of the value column. ' * 5)
     doc.new_page()
     doc.save(pdf)
     data = tmp_path / 'data.csv'
-    pd.DataFrame({'Nilai': [1, 2, 3]}).to_csv(data, index=False)
+    pd.DataFrame({'Value': [1, 2, 3]}).to_csv(data, index=False)
 
     bundle = load_inputs([str(pdf)], str(data), str(tmp_path / 'job'))
 
-    assert 'rata-rata' in bundle.guide_text
+    assert 'average' in bundle.guide_text
     assert len(bundle.guide_images) == 1 and bundle.guide_images[0].endswith('page2.png')
-    assert bundle.sheets[0].columns == ['nilai'] and bundle.sheets[0].n_rows == 3
+    assert bundle.sheets[0].columns == ['value'] and bundle.sheets[0].n_rows == 3
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run pytest tests/test_doc_loader.py -v
 ```
 
-Semua `PASSED`. Lihat juga folder `samples/bandul/`: buka `guide.pdf` dan `data.xlsx`.
+All `PASSED`. Also look at the `samples/pendulum/` folder: open `guide.pdf` and `data.xlsx`.
 
 ---
 
-## Langkah 7: `operations.py`: daftar op + validasi rumus
+## Step 7: `operations.py`: list of ops + formula validation
 
-🎯 **Tujuan:** fungsi-fungsi pandas yang boleh dipakai rencana, plus satpam rumus.
+🎯 **Goal:** the pandas functions a plan is allowed to use, plus a formula guard.
 
-💡 **Konsep 1: validasi rumus pakai `ast`.** Rumus dipecah jadi "pohon", terus tiap potongannya dicek:
+💡 **Concept 1: formula validation with `ast`.** The formula is broken into a "tree", then each piece is checked:
 
 ```
-"4 * pi ** 2 * panjang_tali_m"   ✅ angka, konstanta, kolom
-"__import__('os').system('ls')"  ❌ fungsi gak diizinkan
-"a.__class__"                    ❌ akses atribut
-"T ^ 2"                          ❌ ^ di Python bukan pangkat → pesan: pakai **
+"4 * pi ** 2 * string_length_m"  ✅ number, constant, column
+"__import__('os').system('ls')"  ❌ function not allowed
+"a.__class__"                    ❌ attribute access
+"T ^ 2"                          ❌ ^ isn't power in Python → message: use **
 ```
 
-💡 **Konsep 2: `PlanError`.** Semua kesalahan rencana jadi `PlanError` dengan pesan yang jelas. Pesan ini nanti **dikirim balik ke LLM** biar dia bisa benerin rencananya sendiri.
+💡 **Concept 2: `PlanError`.** Every plan mistake becomes a `PlanError` with a clear message. This message is later **sent back to the LLM** so it can fix its own plan.
 
-💡 **Konsep 3: registry `OPERATIONS`.** Kamus `nama op → fungsi`. Nambah op baru = bikin fungsi + daftarin di kamus (lihat [G4](#g4-cara-nambah-op-baru)).
+💡 **Concept 3: the `OPERATIONS` registry.** A dictionary `op name → function`. Adding a new op = write a function + register it in the dictionary (see [G4](#g4-how-to-add-a-new-op)).
 
-🧩 Bikin `src/data_agent/operations.py`:
+🧩 Create `src/data_agent/operations.py`:
 
 ```python
-# operations.py: "kamus" operasi pandas yang boleh dipakai rencana
-# LLM cuma milih op + parameter; yang ngitung tetap kode kita (hasilnya pasti)
+# operations.py: the "dictionary" of pandas operations a plan is allowed to use
+# the LLM only picks an op + parameters; our code does the calculating (so results are deterministic)
 import ast
 import math
 
@@ -1226,15 +1226,15 @@ from data_agent.custom_types import Step
 
 
 class PlanError(Exception):
-    # error karena rencana salah (kolom gak ada, rumus aneh, dll)
-    # pesannya dikirim balik ke LLM biar dia bisa benerin
+    # error caused by a bad plan (missing column, odd formula, etc.)
+    # the message is sent back to the LLM so it can fix the plan
     pass
 
 
 CONSTANTS = {'pi': math.pi, 'e': math.e}
 ALLOWED_FUNCS = {'sqrt', 'abs', 'log', 'log10', 'exp', 'sin', 'cos', 'tan'}
 
-# jenis "potongan" rumus yang diizinkan. Selain ini (akses atribut, import, lambda, dll) ditolak
+# allowed kinds of formula "pieces". Anything else (attribute access, import, lambda, etc.) is rejected
 _ALLOWED_NODES = (
     ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
     ast.Name, ast.Load, ast.Constant, ast.Call,
@@ -1245,45 +1245,45 @@ _ALLOWED_NODES = (
 
 
 def validate_expr(expr: str, columns: list[str]) -> None:
-    # cek rumus SEBELUM dijalanin: cuma boleh angka, nama kolom, konstanta, fungsi matematika
+    # check the formula BEFORE running it: only numbers, column names, constants, math functions allowed
     if '^' in expr:
-        raise PlanError(f"rumus '{expr}' pakai '^'. Untuk pangkat pakai '**'")
+        raise PlanError(f"formula '{expr}' uses '^'. For powers use '**'")
     try:
         tree = ast.parse(expr, mode='eval')
     except SyntaxError as e:
-        raise PlanError(f"rumus '{expr}' gak valid: {e.msg}") from e
+        raise PlanError(f"formula '{expr}' is not valid: {e.msg}") from e
 
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED_NODES):
-            raise PlanError(f"rumus '{expr}' pakai sintaks yang gak diizinkan: {type(node).__name__}")
+            raise PlanError(f"formula '{expr}' uses disallowed syntax: {type(node).__name__}")
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in ALLOWED_FUNCS:
-                raise PlanError(f"rumus '{expr}': fungsi yang boleh cuma {sorted(ALLOWED_FUNCS)}")
+                raise PlanError(f"formula '{expr}': the only allowed functions are {sorted(ALLOWED_FUNCS)}")
             if node.keywords:
-                raise PlanError(f"rumus '{expr}': fungsi gak boleh pakai argumen bernama")
+                raise PlanError(f"formula '{expr}': functions cannot take named arguments")
         if isinstance(node, ast.Name):
             allowed = set(columns) | set(CONSTANTS) | ALLOWED_FUNCS
             if node.id not in allowed:
-                raise PlanError(f"rumus '{expr}': '{node.id}' bukan kolom. Kolom yang ada: {columns}")
+                raise PlanError(f"formula '{expr}': '{node.id}' is not a column. Available columns: {columns}")
 
 
 def _need(step: Step, *names: str) -> None:
-    # pastiin parameter wajib buat op ini diisi
+    # make sure the required parameters for this op are filled in
     for name in names:
         if getattr(step, name) in (None, [], ''):
-            raise PlanError(f"op '{step.op}' butuh parameter '{name}'")
+            raise PlanError(f"op '{step.op}' needs parameter '{name}'")
 
 
 def _check_columns(df: pd.DataFrame, cols: list[str]) -> None:
     missing = [c for c in cols if c not in df.columns]
     if missing:
-        raise PlanError(f'kolom {missing} gak ada. Kolom yang ada: {list(df.columns)}')
+        raise PlanError(f'columns {missing} do not exist. Available columns: {list(df.columns)}')
 
 
-# ---------- satu fungsi per op ----------
+# ---------- one function per op ----------
 
 def op_compute(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # bikin kolom baru dari rumus, contoh: T = waktu_10_ayunan / 10
+    # create a new column from a formula, e.g. T = time_10_swings / 10
     _need(step, 'new_column', 'expr')
     validate_expr(step.expr, list(df.columns))
     df = df.copy()
@@ -1292,14 +1292,14 @@ def op_compute(df: pd.DataFrame, step: Step) -> pd.DataFrame:
 
 
 def op_filter(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # saring baris, contoh: percobaan > 1 and panjang_tali <= 1
+    # filter rows, e.g. trial > 1 and string_length <= 1
     _need(step, 'expr')
     validate_expr(step.expr, list(df.columns))
     return df.query(step.expr, resolvers=[CONSTANTS])
 
 
 def op_select(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # pilih + urutin kolom (dipakai buat nyamain format template)
+    # pick + order columns (used to match a template's format)
     _need(step, 'columns')
     _check_columns(df, step.columns)
     return df[step.columns]
@@ -1319,7 +1319,7 @@ def op_sort(df: pd.DataFrame, step: Step) -> pd.DataFrame:
 
 
 def op_round(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # kalau columns kosong: bulatin semua kolom angka
+    # if columns is empty: round all numeric columns
     _need(step, 'decimals')
     cols = step.columns or list(df.select_dtypes('number').columns)
     _check_columns(df, cols)
@@ -1329,7 +1329,7 @@ def op_round(df: pd.DataFrame, step: Step) -> pd.DataFrame:
 
 
 def op_group_agg(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # rata-rata/jumlah per kelompok, contoh: rata-rata g per panjang_tali
+    # mean/sum per group, e.g. mean g per string_length
     _need(step, 'by', 'aggregations')
     _check_columns(df, step.by + [a.column for a in step.aggregations])
     named = {a.output: (a.column, a.func) for a in step.aggregations}
@@ -1337,7 +1337,7 @@ def op_group_agg(df: pd.DataFrame, step: Step) -> pd.DataFrame:
 
 
 def op_aggregate(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # ringkasan satu baris untuk seluruh data, contoh: rata-rata g
+    # one-row summary of the whole data, e.g. mean g
     _need(step, 'aggregations')
     _check_columns(df, [a.column for a in step.aggregations])
     row = {a.output: df[a.column].agg(a.func) for a in step.aggregations}
@@ -1345,13 +1345,13 @@ def op_aggregate(df: pd.DataFrame, step: Step) -> pd.DataFrame:
 
 
 def op_linear_fit(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # regresi linear y = slope * x + intercept, plus R²
+    # linear regression y = slope * x + intercept, plus R²
     _need(step, 'x', 'y')
     _check_columns(df, [step.x, step.y])
     x = df[step.x].astype(float).to_numpy()
     y = df[step.y].astype(float).to_numpy()
     if len(x) < 2:
-        raise PlanError('linear_fit butuh minimal 2 baris data')
+        raise PlanError('linear_fit needs at least 2 rows of data')
     slope, intercept = np.polyfit(x, y, 1)
     y_pred = slope * x + intercept
     ss_res = float(((y - y_pred) ** 2).sum())
@@ -1378,37 +1378,37 @@ def apply_step(df: pd.DataFrame, step: Step) -> pd.DataFrame:
         return OPERATIONS[step.op](df, step)
     except PlanError:
         raise
-    except Exception as e:  # error pandas lain juga diubah jadi PlanError biar bisa dibenerin LLM
-        raise PlanError(f"op '{step.op}' gagal: {type(e).__name__}: {e}") from e
+    except Exception as e:  # other pandas errors are also turned into PlanError so the LLM can fix them
+        raise PlanError(f"op '{step.op}' failed: {type(e).__name__}: {e}") from e
 
 
 def describe_step(step: Step) -> str:
-    # versi "manusia" dari tiap step, ditampilin di bawah tabel
+    # "human" version of each step, shown under the table
     match step.op:
         case 'compute':
             return f'{step.new_column} = {step.expr}'
         case 'filter':
             return f'filter: {step.expr}'
         case 'select':
-            return f"kolom: {', '.join(step.columns or [])}"
+            return f"columns: {', '.join(step.columns or [])}"
         case 'rename':
-            return 'ganti nama: ' + ', '.join(f'{r.old} → {r.new}' for r in step.renames or [])
+            return 'rename: ' + ', '.join(f'{r.old} → {r.new}' for r in step.renames or [])
         case 'sort':
-            arah = 'besar → kecil' if step.descending else 'kecil → besar'
-            return f"urutkan {', '.join(step.by or [])} ({arah})"
+            direction = 'high → low' if step.descending else 'low → high'
+            return f"sort {', '.join(step.by or [])} ({direction})"
         case 'round':
-            cols = ', '.join(step.columns) if step.columns else 'semua angka'
-            return f'bulatkan {cols} ke {step.decimals} desimal'
+            cols = ', '.join(step.columns) if step.columns else 'all numbers'
+            return f'round {cols} to {step.decimals} decimals'
         case 'group_agg' | 'aggregate':
             aggs = ', '.join(f'{a.output} = {a.func}({a.column})' for a in step.aggregations or [])
             per = f" per {', '.join(step.by)}" if step.op == 'group_agg' and step.by else ''
             return f'{aggs}{per}'
         case 'linear_fit':
-            return f'regresi linear: {step.y} = slope × {step.x} + intercept'
+            return f'linear regression: {step.y} = slope × {step.x} + intercept'
     return step.op
 ```
 
-🧩 Bikin `tests/test_operations.py`:
+🧩 Create `tests/test_operations.py`:
 
 ```python
 import pandas as pd
@@ -1421,54 +1421,54 @@ COLS = ['a', 'b']
 
 
 def df() -> pd.DataFrame:
-    return pd.DataFrame({'a': [1.0, 4.0, 9.0], 'b': [2, 2, 3], 'grup': ['x', 'y', 'x']})
+    return pd.DataFrame({'a': [1.0, 4.0, 9.0], 'b': [2, 2, 3], 'group': ['x', 'y', 'x']})
 
 
-# ---------- validasi rumus ----------
-def test_rumus_valid_lolos():
+# ---------- formula validation ----------
+def test_valid_formula_passes():
     validate_expr('sqrt(a) * pi + b ** 2', COLS)
 
 
 @pytest.mark.parametrize('expr', [
-    "__import__('os').system('ls')",  # nyoba jalanin perintah sistem
-    'a.__class__',                     # akses atribut
-    'c + 1',                           # kolom gak ada
-    'a ^ 2',                           # ^ bukan pangkat di Python
-    'max(a)',                          # fungsi gak diizinkan
+    "__import__('os').system('ls')",  # trying to run a system command
+    'a.__class__',                     # attribute access
+    'c + 1',                           # column does not exist
+    'a ^ 2',                           # ^ is not power in Python
+    'max(a)',                          # function not allowed
 ])
-def test_rumus_berbahaya_atau_salah_ditolak(expr):
+def test_dangerous_or_wrong_formula_rejected(expr):
     with pytest.raises(PlanError):
         validate_expr(expr, COLS)
 
 
-# ---------- tiap op ----------
+# ---------- each op ----------
 def test_compute():
     out = apply_step(df(), Step(op='compute', new_column='c', expr='a / b'))
     assert out['c'].tolist() == [0.5, 2.0, 3.0]
 
 
 def test_filter():
-    out = apply_step(df(), Step(op='filter', expr="a > 2 and grup == 'x'"))
+    out = apply_step(df(), Step(op='filter', expr="a > 2 and group == 'x'"))
     assert out['a'].tolist() == [9.0]
 
 
-def test_round_semua_kolom_angka():
-    data = pd.DataFrame({'x': [1.23456], 'y': [2.98765], 'nama': ['a']})
+def test_round_all_numeric_columns():
+    data = pd.DataFrame({'x': [1.23456], 'y': [2.98765], 'name': ['a']})
     out = apply_step(data, Step(op='round', decimals=2))
     assert out.iloc[0].tolist() == [1.23, 2.99, 'a']
 
 
 def test_group_agg():
-    step = Step(op='group_agg', by=['grup'],
+    step = Step(op='group_agg', by=['group'],
                 aggregations=[Aggregation(column='a', func='sum', output='total')])
     out = apply_step(df(), step)
-    assert dict(zip(out['grup'], out['total'])) == {'x': 10.0, 'y': 4.0}
+    assert dict(zip(out['group'], out['total'])) == {'x': 10.0, 'y': 4.0}
 
 
-def test_aggregate_jadi_satu_baris():
-    step = Step(op='aggregate', aggregations=[Aggregation(column='a', func='mean', output='rata')])
+def test_aggregate_becomes_one_row():
+    step = Step(op='aggregate', aggregations=[Aggregation(column='a', func='mean', output='avg')])
     out = apply_step(df(), step)
-    assert out.shape == (1, 1) and out['rata'][0] == pytest.approx(14 / 3)
+    assert out.shape == (1, 1) and out['avg'][0] == pytest.approx(14 / 3)
 
 
 def test_linear_fit():
@@ -1479,17 +1479,17 @@ def test_linear_fit():
     assert out['r2'][0] == pytest.approx(1)
 
 
-def test_parameter_wajib_kosong():
-    with pytest.raises(PlanError, match="butuh parameter 'expr'"):
+def test_missing_required_parameter():
+    with pytest.raises(PlanError, match="needs parameter 'expr'"):
         apply_step(df(), Step(op='compute', new_column='c'))
 
 
-def test_kolom_gak_ada():
-    with pytest.raises(PlanError, match='gak ada'):
+def test_column_does_not_exist():
+    with pytest.raises(PlanError, match='do not exist'):
         apply_step(df(), Step(op='select', columns=['zzz']))
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run pytest tests/test_operations.py -v
@@ -1497,22 +1497,22 @@ uv run pytest tests/test_operations.py -v
 
 ---
 
-## Langkah 8: `executor.py`: jalanin rencana
+## Step 8: `executor.py`: run the plan
 
-🎯 **Tujuan:** jalanin `Plan` tabel demi tabel, step demi step.
+🎯 **Goal:** run the `Plan` table by table, step by step.
 
-💡 **Konsep:** tabel yang udah jadi disimpan di `frames`, jadi bisa dipakai jadi `source` tabel berikutnya. Contoh: tabel "Ringkasan" ngambil rata-rata dari tabel "Hasil".
+💡 **Concept:** tables that are already built are kept in `frames`, so they can be used as the `source` of the next table. Example: the "Summary" table takes the average from the "Results" table.
 
 ```
-frames = {"data": <sheet Excel>}
-tabel "hasil"     (source="data")  → frames["hasil"] = ...
-tabel "ringkasan" (source="hasil") → pakai hasil tabel sebelumnya
+frames = {"data": <Excel sheet>}
+table "results"  (source="data")    → frames["results"] = ...
+table "summary"  (source="results") → uses the previous table's result
 ```
 
-🧩 Bikin `src/data_agent/executor.py`:
+🧩 Create `src/data_agent/executor.py`:
 
 ```python
-# executor.py: jalanin rencana (Plan) langkah demi langkah pakai pandas
+# executor.py: runs the plan (Plan) step by step with pandas
 import json
 
 import pandas as pd
@@ -1522,42 +1522,42 @@ from data_agent.operations import PlanError, apply_step, describe_step
 
 
 def to_result_table(table_id: str, title: str, df: pd.DataFrame, formulas: list[str]) -> ResultTable:
-    # to_json -> json.loads: ubah NaN jadi null dan tipe numpy jadi angka biasa
+    # to_json -> json.loads: turn NaN into null and numpy types into plain numbers
     data = json.loads(df.to_json(orient='split', index=False))
     return ResultTable(id=table_id, title=title, columns=data['columns'],
                        rows=data['data'], formulas=formulas)
 
 
 def run_plan(plan: Plan, sheets: dict[str, pd.DataFrame]) -> list[ResultTable]:
-    frames = dict(sheets)  # sumber data: sheet Excel + tabel yang udah jadi
+    frames = dict(sheets)  # data sources: Excel sheets + tables already built
     results: list[ResultTable] = []
 
     for table in plan.tables:
         if table.source not in frames:
             raise PlanError(
-                f"tabel '{table.id}': source '{table.source}' gak ada. "
-                f'Yang ada: {list(frames)}'
+                f"table '{table.id}': source '{table.source}' does not exist. "
+                f'Available: {list(frames)}'
             )
         df = frames[table.source]
         for i, step in enumerate(table.steps, start=1):
             try:
                 df = apply_step(df, step)
             except PlanError as e:
-                raise PlanError(f"tabel '{table.id}', step {i}: {e}") from e
+                raise PlanError(f"table '{table.id}', step {i}: {e}") from e
 
-        frames[table.id] = df  # tabel ini bisa jadi source tabel berikutnya
+        frames[table.id] = df  # this table can be the source of the next table
         formulas = [describe_step(s) for s in table.steps]
         results.append(to_result_table(table.id, table.title, df, formulas))
 
     return results
 ```
 
-🧩 Bikin `src/data_agent/evaluate.py` sekarang juga, karena fungsi `compare()`-nya dipakai di test (cara jalanin script eval-nya ada di Langkah 13):
+🧩 Create `src/data_agent/evaluate.py` right now too, because its `compare()` function is used in tests (how to run the eval script is in Step 13):
 
 ```python
-# evaluate.py: jalanin semua contoh di samples/ dan bandingin sama expected.json
-# jalanin: uv run data-agent-eval
-# dipakai tiap kali ganti model / ubah prompt, biar ketahuan hasilnya makin bagus atau jelek
+# evaluate.py: runs every example in samples/ and compares it with expected.json
+# run: uv run data-agent-eval
+# use it every time you change the model / edit a prompt, to see whether results got better or worse
 import json
 import logging
 import math
@@ -1568,7 +1568,7 @@ from pathlib import Path
 from data_agent.doc_loader import classify
 
 SAMPLES_DIR = Path('samples')
-TOLERANCE = 1e-3  # selisih relatif yang masih dianggap sama
+TOLERANCE = 1e-3  # relative difference still counted as equal
 
 
 def _same(a, b) -> bool:
@@ -1578,23 +1578,23 @@ def _same(a, b) -> bool:
 
 
 def compare(expected: list[dict], actual: list[dict]) -> list[str]:
-    # balikin daftar masalah; kosong = lolos
+    # return a list of problems; empty = pass
     problems = []
     if len(expected) != len(actual):
-        problems.append(f'jumlah tabel: harusnya {len(expected)}, dapat {len(actual)}')
+        problems.append(f'number of tables: expected {len(expected)}, got {len(actual)}')
     for i, (exp, act) in enumerate(zip(expected, actual), start=1):
         if len(exp['rows']) != len(act['rows']):
-            problems.append(f"tabel {i}: jumlah baris {len(act['rows'])}, harusnya {len(exp['rows'])}")
+            problems.append(f"table {i}: {len(act['rows'])} rows, expected {len(exp['rows'])}")
             continue
         for r, (er, ar) in enumerate(zip(exp['rows'], act['rows']), start=1):
             if len(er) != len(ar) or not all(_same(x, y) for x, y in zip(er, ar)):
-                problems.append(f'tabel {i} baris {r}: dapat {ar}, harusnya {er}')
+                problems.append(f'table {i} row {r}: got {ar}, expected {er}')
                 break
     return problems
 
 
 def main() -> None:
-    # import di dalam fungsi: compare() bisa dipakai test tanpa harus nyiapin pipeline/LLM
+    # imported inside the function: compare() can be used in tests without setting up the pipeline/LLM
     from data_agent.pipeline import run_all
 
     logging.basicConfig(level=logging.WARNING)
@@ -1621,11 +1621,11 @@ def main() -> None:
             passed += 1
             print(f'✅ {folder.name}')
 
-    print(f'\n{passed}/{len(folders)} sample lolos')
+    print(f'\n{passed}/{len(folders)} samples passed')
     sys.exit(0 if passed == len(folders) else 1)
 ```
 
-🧩 Bikin `tests/test_executor.py`:
+🧩 Create `tests/test_executor.py`:
 
 ```python
 import json
@@ -1639,65 +1639,65 @@ from data_agent.executor import run_plan
 from data_agent.operations import PlanError
 
 
-def test_rencana_bandul_sesuai_jawaban(bandul_dir, bandul_plan):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    tables = run_plan(bandul_plan, sheets)
-    expected = json.loads((bandul_dir / 'expected.json').read_text())['tables']
+def test_pendulum_plan_matches_answer(pendulum_dir, pendulum_plan):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    tables = run_plan(pendulum_plan, sheets)
+    expected = json.loads((pendulum_dir / 'expected.json').read_text())['tables']
 
     assert compare(expected, [t.model_dump() for t in tables]) == []
-    assert tables[0].columns == ['Percobaan', 'L (m)', 'T (s)', 'g (m/s2)']  # format template
-    assert 'g = 4 * pi ** 2 * panjang_tali_m / t_periode ** 2' in tables[0].formulas
+    assert tables[0].columns == ['Trial', 'L (m)', 'T (s)', 'g (m/s2)']  # template format
+    assert 'g = 4 * pi ** 2 * string_length_m / t_period ** 2' in tables[0].formulas
 
 
-def test_source_salah(bandul_dir):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    plan = Plan(tables=[TablePlan(id='x', title='X', source='gak_ada', steps=[])])
-    with pytest.raises(PlanError, match="source 'gak_ada'"):
+def test_wrong_source(pendulum_dir):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    plan = Plan(tables=[TablePlan(id='x', title='X', source='does_not_exist', steps=[])])
+    with pytest.raises(PlanError, match="source 'does_not_exist'"):
         run_plan(plan, sheets)
 
 
-def test_error_nyebut_tabel_dan_step(bandul_dir):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    plan = Plan(tables=[TablePlan(id='hasil', title='H', source='data', steps=[
-        Step(op='compute', new_column='T', expr='waktu / 10'),  # kolom "waktu" gak ada
+def test_error_mentions_table_and_step(pendulum_dir):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    plan = Plan(tables=[TablePlan(id='results', title='R', source='data', steps=[
+        Step(op='compute', new_column='T', expr='time / 10'),  # column "time" does not exist
     ])])
-    with pytest.raises(PlanError, match="tabel 'hasil', step 1"):
+    with pytest.raises(PlanError, match="table 'results', step 1"):
         run_plan(plan, sheets)
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run pytest tests/test_executor.py -v
 ```
 
-`test_rencana_bandul_sesuai_jawaban` lolos = op + executor ngitung persis kayak jawaban manual. 🎉
+`test_pendulum_plan_matches_answer` passes = the ops + executor calculate exactly like the manual answer. 🎉
 
 ---
 
-## Langkah 9: `prompts.py`: semua prompt di satu tempat
+## Step 9: `prompts.py`: all prompts in one place
 
-🎯 **Tujuan:** 3 prompt: ekstrak instruksi, bikin rencana, review.
+🎯 **Goal:** 3 prompts: extract instructions, make the plan, review.
 
-💡 **Konsep:**
-- prompt ditulis **bahasa Inggris** (model lebih konsisten), tapi model diminta tetap pakai **bahasa dokumen** buat judul & isi tabel
-- `OPS_REFERENCE` = "buku manual" op buat LLM. **Harus selalu sama** dengan isi `operations.py`
-- `make_plan()` bisa nerima rencana sebelumnya + pesan error buat percobaan ulang
+💡 **Concept:**
+- prompts are written in **English** (the model is more consistent), but the model is asked to keep the **document's language** for table titles & contents
+- `OPS_REFERENCE` = the ops "manual" for the LLM. **It must always match** the contents of `operations.py`
+- `make_plan()` can accept a previous plan + error message for retries
 
-🧩 Bikin `src/data_agent/prompts.py`:
+🧩 Create `src/data_agent/prompts.py`:
 
 ```python
-# prompts.py: semua teks prompt dikumpulin di sini
-# prompt ditulis dalam bahasa Inggris karena model lebih konsisten,
-# tapi model diminta tetap pakai bahasa dokumen untuk judul & isi tabel
+# prompts.py: all prompt texts are collected here
+# prompts are written in English because the model is more consistent that way,
+# but the model is asked to keep the document's language for table titles & contents
 import json
 
 from data_agent.custom_types import InputBundle, Instructions, Plan, ResultTable
 
 OPS_REFERENCE = """
 Available operations (field "op") and their parameters:
-- compute:    new_column, expr   -> add a column from a formula, e.g. expr "waktu / 10"
-- filter:     expr               -> keep rows where the condition is true, e.g. "nilai > 0 and grup == 'A'"
+- compute:    new_column, expr   -> add a column from a formula, e.g. expr "time / 10"
+- filter:     expr               -> keep rows where the condition is true, e.g. "value > 0 and group == 'A'"
 - select:     columns            -> keep and ORDER these columns (use it last to match a template)
 - rename:     renames [{old, new}] -> rename columns (use it to match column names in a template)
 - sort:       by, descending
@@ -1710,7 +1710,7 @@ func is one of: mean, sum, min, max, count, std, median
 Formula rules (expr):
 - use ONLY column names that exist at that point (listed below, plus columns you created earlier)
 - power is ** (never ^). Constants: pi, e. Functions: sqrt, abs, log, log10, exp, sin, cos, tan
-- strings in conditions use single quotes: grup == 'A'
+- strings in conditions use single quotes: group == 'A'
 
 Table rules:
 - each table has: id (snake_case, unique), title (in the document's language), source, steps
@@ -1796,7 +1796,7 @@ RESULT TABLES:
 {json.dumps(preview, ensure_ascii=False, indent=1)}"""
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run python -c "from data_agent import prompts; print(prompts.OPS_REFERENCE[:200])"
@@ -1804,28 +1804,28 @@ uv run python -c "from data_agent import prompts; print(prompts.OPS_REFERENCE[:2
 
 ---
 
-## Langkah 10: `pipeline.py`: 5 tahap jadi fungsi biasa
+## Step 10: `pipeline.py`: 5 stages as plain functions
 
-🎯 **Tujuan:** tiap tahap proses jadi fungsi biasa yang bisa dites tanpa Inngest.
+🎯 **Goal:** each process stage becomes a plain function that can be tested without Inngest.
 
-💡 **Konsep 1:** `main.py` nanti tinggal ngebungkus tiap fungsi ini jadi 1 step Inngest. Karena fungsi biasa, gampang dites & dijalanin dari terminal.
+💡 **Concept 1:** `main.py` will just wrap each of these functions as 1 Inngest step. Since they're plain functions, they're easy to test & run from the terminal.
 
-💡 **Konsep 2: self-correction.** Di `step_plan`, rencana langsung **diuji di data asli**. Kalau error, pesan errornya dikirim ke LLM buat dibenerin (maks 3x):
+💡 **Concept 2: self-correction.** In `step_plan`, the plan is **tested right away on the real data**. On error, the error message is sent to the LLM to fix (max 3x):
 
 ```
-LLM: compute T = waktu / 10
-pandas: ❌ 'waktu' bukan kolom. Kolom yang ada: [percobaan, panjang_tali_m, waktu_10_ayunan_s]
-LLM: compute T = waktu_10_ayunan_s / 10   ✅
+LLM: compute T = time / 10
+pandas: ❌ 'time' is not a column. Available columns: [trial, string_length_m, time_10_swings_s]
+LLM: compute T = time_10_swings_s / 10   ✅
 ```
 
-💡 **Konsep 3: test pakai LLM palsu (`monkeypatch`).** Di test, `llm.structured` diganti fungsi palsu yang jawabannya udah kita tentuin. Jadi test jalan cepat, gratis, dan hasilnya selalu sama.
+💡 **Concept 3: tests with a fake LLM (`monkeypatch`).** In tests, `llm.structured` is replaced by a fake function whose answers we decided in advance. So tests run fast, free, and always give the same result.
 
-🧩 Bikin `src/data_agent/pipeline.py`:
+🧩 Create `src/data_agent/pipeline.py`:
 
 ```python
-# pipeline.py: tahap-tahap proses, masing-masing fungsi biasa
-# main.py ngebungkus tiap fungsi ini jadi 1 step Inngest,
-# tapi karena fungsi biasa, gampang dites & dijalanin tanpa Inngest
+# pipeline.py: the processing stages, each a plain function
+# main.py wraps each of these functions as one Inngest step,
+# but since they're plain functions, they're easy to test and run without Inngest
 import logging
 
 from data_agent import llm, prompts
@@ -1835,7 +1835,7 @@ from data_agent.executor import run_plan
 from data_agent.operations import PlanError
 
 logger = logging.getLogger(__name__)
-MAX_PLAN_ATTEMPTS = 3  # rencana gagal dijalanin -> error dikirim ke LLM buat dibenerin
+MAX_PLAN_ATTEMPTS = 3  # plan failed to run -> the error is sent to the LLM to fix
 
 
 def step_load(guide_paths: list[str], data_path: str, work_dir: str) -> InputBundle:
@@ -1856,13 +1856,13 @@ def step_plan(bundle: InputBundle, instructions: Instructions) -> Plan:
         prompt = prompts.make_plan(bundle, instructions, previous=plan, error=error)
         plan = llm.structured(prompt, Plan, label='plan')
         try:
-            run_plan(plan, sheets)  # "uji coba" di data asli: kalau error, ketahuan di sini
+            run_plan(plan, sheets)  # "dry run" on the real data: errors show up here
             return plan
         except PlanError as e:
             error = str(e)
-            logger.warning('rencana gagal (percobaan %s): %s', attempt, error)
+            logger.warning('plan failed (attempt %s): %s', attempt, error)
 
-    raise PlanError(f'rencana tetap gagal setelah {MAX_PLAN_ATTEMPTS} percobaan: {error}')
+    raise PlanError(f'plan still failed after {MAX_PLAN_ATTEMPTS} attempts: {error}')
 
 
 def step_run(bundle: InputBundle, plan: Plan) -> TableSet:
@@ -1874,7 +1874,7 @@ def step_review(instructions: Instructions, tables: TableSet) -> Review:
 
 
 def run_all(guide_paths: list[str], data_path: str, work_dir: str) -> JobResult:
-    # semua tahap berurutan, tanpa Inngest (buat CLI & evaluasi)
+    # all stages in order, without Inngest (for the CLI & evaluation)
     bundle = step_load(guide_paths, data_path, work_dir)
     instructions = step_extract(bundle)
     plan = step_plan(bundle, instructions)
@@ -1883,19 +1883,19 @@ def run_all(guide_paths: list[str], data_path: str, work_dir: str) -> JobResult:
     return JobResult(instructions=instructions, plan=plan, tables=tables.tables, review=review)
 ```
 
-🧩 Bikin `tests/test_pipeline.py`:
+🧩 Create `tests/test_pipeline.py`:
 
 ```python
-# test pipeline TANPA model asli: llm.structured diganti fungsi palsu (monkeypatch)
+# test the pipeline WITHOUT a real model: llm.structured is replaced by a fake function (monkeypatch)
 from data_agent import pipeline
 from data_agent.custom_types import Instructions, Plan, Review, Step, TablePlan
 
 
-def test_rencana_salah_dibenerin_pakai_pesan_error(bandul_dir, bandul_plan, monkeypatch):
-    bad_plan = Plan(tables=[TablePlan(id='hasil', title='H', source='data', steps=[
-        Step(op='compute', new_column='T', expr='waktu / 10'),  # kolom salah
+def test_bad_plan_gets_fixed_using_the_error_message(pendulum_dir, pendulum_plan, monkeypatch):
+    bad_plan = Plan(tables=[TablePlan(id='results', title='R', source='data', steps=[
+        Step(op='compute', new_column='T', expr='time / 10'),  # wrong column
     ])])
-    answers = [bad_plan, bandul_plan]  # jawaban pertama salah, kedua benar
+    answers = [bad_plan, pendulum_plan]  # first answer is wrong, second is correct
     prompts_seen = []
 
     def fake_structured(prompt, schema, images=None, label=''):
@@ -1903,64 +1903,64 @@ def test_rencana_salah_dibenerin_pakai_pesan_error(bandul_dir, bandul_plan, monk
         return answers.pop(0)
 
     monkeypatch.setattr(pipeline.llm, 'structured', fake_structured)
-    bundle = pipeline.step_load([str(bandul_dir / 'guide.pdf')], str(bandul_dir / 'data.xlsx'),
-                                str(bandul_dir.parent.parent / 'uploads' / 'test'))
-    plan = pipeline.step_plan(bundle, Instructions(items=['T = t / 10'], expected_tables=['H']))
+    bundle = pipeline.step_load([str(pendulum_dir / 'guide.pdf')], str(pendulum_dir / 'data.xlsx'),
+                                str(pendulum_dir.parent.parent / 'uploads' / 'test'))
+    plan = pipeline.step_plan(bundle, Instructions(items=['T = t / 10'], expected_tables=['R']))
 
-    assert plan == bandul_plan
-    assert 'FAILED' in prompts_seen[1] and "'waktu' bukan kolom" in prompts_seen[1]
+    assert plan == pendulum_plan
+    assert 'FAILED' in prompts_seen[1] and "'time' is not a column" in prompts_seen[1]
 
 
-def test_run_all_dengan_llm_palsu(bandul_dir, bandul_plan, monkeypatch, tmp_path):
+def test_run_all_with_fake_llm(pendulum_dir, pendulum_plan, monkeypatch, tmp_path):
     def fake_structured(prompt, schema, images=None, label=''):
         if schema is Instructions:
-            return Instructions(items=['hitung T', 'hitung g'], expected_tables=['Hasil', 'Ringkasan'])
+            return Instructions(items=['calculate T', 'calculate g'], expected_tables=['Results', 'Summary'])
         if schema is Plan:
-            return bandul_plan
+            return pendulum_plan
         return Review(items=[])
 
     monkeypatch.setattr(pipeline.llm, 'structured', fake_structured)
-    result = pipeline.run_all([str(bandul_dir / 'guide.pdf')], str(bandul_dir / 'data.xlsx'), str(tmp_path))
-    assert [t.title for t in result.tables] == ['Hasil Perhitungan', 'Ringkasan']
+    result = pipeline.run_all([str(pendulum_dir / 'guide.pdf')], str(pendulum_dir / 'data.xlsx'), str(tmp_path))
+    assert [t.title for t in result.tables] == ['Calculation Results', 'Summary']
     assert result.tables[1].rows == [[9.791, 0.09]]
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run pytest -v
 ```
 
-Semua test sejauh ini lolos.
+All the tests so far pass.
 
 ---
 
-## Langkah 11: (jeda) commit pertama
+## Step 11: (break) first commit
 
-🎯 **Tujuan:** simpan progress ke git.
+🎯 **Goal:** save progress to git.
 
 ```fish
-cd ..                     # ke folder DATA-PROCESSOR
-git init                  # kalau DATA-PROCESSOR belum di dalam repo lain
+cd ..                     # to the DATA-PROCESSOR folder
+git init                  # if DATA-PROCESSOR isn't inside another repo yet
 git add backend
-git status                # pastiin .env, .venv, uploads GAK ada di daftar
+git status                # make sure .env, .venv, uploads are NOT in the list
 git commit -m "backend: loader, operations, executor, pipeline + tests"
 cd backend
 ```
 
-> Kalau `DATA-PROCESSOR` ada **di dalam** repo `AI APPS` (sebelahan sama RAG-PDF), lewatin `git init`, langsung `git add` aja. Repo git di dalam repo git lain bikin ribet.
+> If `DATA-PROCESSOR` is **inside** the `AI APPS` repo (next to RAG-PDF), skip `git init` and just `git add`. A git repo inside another git repo is a hassle.
 
 ---
 
-## Langkah 12: `cli.py`: jalanin pakai model asli 🚀
+## Step 12: `cli.py`: run it with the real model 🚀
 
-🎯 **Tujuan:** pertama kali jalanin **seluruh pipeline** pakai Ollama, dari terminal.
+🎯 **Goal:** run the **whole pipeline** with Ollama for the first time, from the terminal.
 
-🧩 Bikin `src/data_agent/cli.py`:
+🧩 Create `src/data_agent/cli.py`:
 
 ```python
-# cli.py: CLI buat jalanin pipeline langsung dari terminal (tanpa server)
-# contoh: uv run data-agent samples/bandul/guide.pdf samples/bandul/data.xlsx
+# cli.py: CLI for running the pipeline straight from the terminal (no server)
+# example: uv run data-agent samples/pendulum/guide.pdf samples/pendulum/data.xlsx
 import argparse
 import json
 import logging
@@ -1971,19 +1971,19 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     logging.getLogger('httpx').setLevel(logging.WARNING)
 
-    parser = argparse.ArgumentParser(description='Proses data mentah sesuai guide')
-    parser.add_argument('files', nargs='+', help='file guide (PDF/gambar) + 1 file data (.xlsx/.csv)')
-    parser.add_argument('--json', action='store_true', help='print hasil lengkap sebagai JSON')
+    parser = argparse.ArgumentParser(description='Process raw data following a guide')
+    parser.add_argument('files', nargs='+', help='guide file(s) (PDF/image) + 1 data file (.xlsx/.csv)')
+    parser.add_argument('--json', action='store_true', help='print the full result as JSON')
     args = parser.parse_args()
 
-    # import di sini biar `--help` tetap jalan walau .env belum ada
+    # imported here so `--help` still works even without a .env file
     from data_agent.doc_loader import classify
     from data_agent.pipeline import run_all
 
     guides = [f for f in args.files if classify(f) == 'guide']
     datas = [f for f in args.files if classify(f) == 'data']
     if not guides or len(datas) != 1:
-        parser.error('butuh minimal 1 guide dan tepat 1 file data')
+        parser.error('need at least 1 guide and exactly 1 data file')
 
     with tempfile.TemporaryDirectory() as work_dir:
         result = run_all(guides, datas[0], work_dir)
@@ -1997,94 +1997,94 @@ def main() -> None:
         print(' | '.join(table.columns))
         for row in table.rows:
             print(' | '.join(str(v) for v in row))
-        print('rumus:', '; '.join(table.formulas))
-    print('\n=== cek instruksi ===')
+        print('formulas:', '; '.join(table.formulas))
+    print('\n=== instruction check ===')
     for item in result.review.items:
         print('✅' if item.done else '❌', item.instruction, '-', item.note)
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
-uv run data-agent samples/bandul/guide.pdf samples/bandul/data.xlsx
+uv run data-agent samples/pendulum/guide.pdf samples/pendulum/data.xlsx
 ```
 
-Yang diharapkan: log 3 panggilan LLM (`extract`, `plan`, `review`), lalu 2 tabel:
+Expected: logs of 3 LLM calls (`extract`, `plan`, `review`), then 2 tables:
 
 ```
-=== Hasil Perhitungan ===
-Percobaan | L (m) | T (s) | g (m/s2)
+=== Calculation Results ===
+Trial | L (m) | T (s) | g (m/s2)
 1 | 0.3 | 1.102 | 9.753
 ...
-=== Ringkasan ===
-g rata-rata | error (%)
+=== Summary ===
+mean g | error (%)
 9.791 | 0.09
 ```
 
-Mau lihat rencana yang dibikin LLM? Tambahin `--json`. Kalau angkanya beda, bandingin rencananya sama `bandul_plan` di `tests/conftest.py`. Biasanya beda di urutan pembulatan atau nama kolom.
+Want to see the plan the LLM made? Add `--json`. If the numbers differ, compare its plan with `pendulum_plan` in `tests/conftest.py`. It usually differs in the order of rounding or in column names.
 
-> 🔄 Di laptop yang cuma CPU, perintah ini bisa makan **belasan sampai puluhan menit**. Pantau lognya: tiap baris `data_agent.llm` = 1 panggilan model selesai.
+> 🔄 On a CPU-only laptop, this command can take **a dozen to several dozen minutes**. Watch the log: each `data_agent.llm` line = 1 model call finished.
 
 ---
 
-## Langkah 13: `evaluate.py`: rapor otomatis
+## Step 13: `evaluate.py`: automatic report card
 
-🎯 **Tujuan:** satu perintah buat ngecek semua sample. Jalanin tiap kali **ganti model** atau **ubah prompt**.
+🎯 **Goal:** one command to check all samples. Run it every time you **change the model** or **edit a prompt**.
 
-`evaluate.py` udah dibikin di Langkah 8, dan perintahnya udah didaftarin di `pyproject.toml` (Langkah 1).
+`evaluate.py` was already created in Step 8, and its command was already registered in `pyproject.toml` (Step 1).
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
 uv run data-agent-eval
 ```
 
 ```
-✅ bandul
+✅ pendulum
 
-1/1 sample lolos
+1/1 samples passed
 ```
 
-Nambah sample baru = bikin folder baru di `samples/` berisi guide + data + `expected.json` (lihat [G5](#g5-cara-nambah-sample-baru)).
+Adding a new sample = create a new folder in `samples/` containing a guide + data + `expected.json` (see [G5](#g5-how-to-add-a-new-sample)).
 
 ---
 
-## Langkah 14: `jobs.py` + `main.py`: server FastAPI + Inngest
+## Step 14: `jobs.py` + `main.py`: FastAPI + Inngest server
 
-🎯 **Tujuan:** pipeline bisa dipanggil lewat API, jalan di background via Inngest.
+🎯 **Goal:** the pipeline can be called through an API and runs in the background via Inngest.
 
-💡 **Konsep 1: endpoint.**
+💡 **Concept 1: endpoints.**
 
-| Endpoint | Fungsi |
+| Endpoint | Purpose |
 |---|---|
-| `GET /api/health` | cek server hidup + model apa |
-| `POST /api/jobs` | upload file → simpan → kirim event ke Inngest → balikin `event_id` |
-| `GET /api/jobs/{event_id}` | status: `running` / `completed` / `failed` (+ hasil) |
-| `GET /api/jobs/{event_id}/export` | download hasil sebagai Excel |
-| `/api/inngest` | dipakai Inngest dev server (otomatis) |
+| `GET /api/health` | check the server is alive + which model |
+| `POST /api/jobs` | upload files → save → send event to Inngest → return `event_id` |
+| `GET /api/jobs/{event_id}` | status: `running` / `completed` / `failed` (+ result) |
+| `GET /api/jobs/{event_id}/export` | download the result as Excel |
+| `/api/inngest` | used by the Inngest dev server (automatic) |
 
-💡 **Konsep 2: `in_thread`.** Fungsi pipeline itu "blocking" (nunggu LLM). Dijalanin di thread lain biar server tetap bisa ngelayanin request lain (misal cek status).
+💡 **Concept 2: `in_thread`.** The pipeline functions are "blocking" (waiting on the LLM). They run in another thread so the server can keep serving other requests (e.g. status checks).
 
-💡 **Konsep 3: keamanan upload.**
-- cuma ekstensi tertentu yang diterima
-- maksimal `MAX_UPLOAD_MB`
-- `Path(filename).name` → nama file kayak `../../x.xlsx` gak bisa "kabur" dari folder upload
+💡 **Concept 3: upload security.**
+- only certain extensions are accepted
+- at most `MAX_UPLOAD_MB`
+- `Path(filename).name` → a file name like `../../x.xlsx` can't "escape" the upload folder
 
-💡 **Konsep 4: CORS.** Frontend (`localhost:5173`) dan backend (`localhost:8000`) beda "origin". Browser ngeblok request lintas origin, kecuali server bilang boleh lewat `CORSMiddleware`.
+💡 **Concept 4: CORS.** The frontend (`localhost:5173`) and backend (`localhost:8000`) are different "origins". The browser blocks cross-origin requests unless the server says they're allowed through `CORSMiddleware`.
 
-💡 🔄 **Konsep 5: status job dari Inngest.** Inngest dev server punya 2 endpoint yang kelihatannya sama:
+💡 🔄 **Concept 5: job status from Inngest.** The Inngest dev server has 2 endpoints that look similar:
 
 ```
-GET /v1/events/{event_id}/runs   → daftar run buat 1 event   (dipakai buat nyari run_id aja)
-GET /v1/runs/{run_id}            → detail 1 run              (status + output yang BENER)
+GET /v1/events/{event_id}/runs   → list of runs for 1 event   (only used to find the run_id)
+GET /v1/runs/{run_id}            → detail of 1 run            (the CORRECT status + output)
 ```
 
-Di inngest-cli 1.46, daftar run per event bisa udah bilang `"Completed"` padahal run-nya **masih jalan** (`ended_at: null`, belum ada `output`). Kalau cuma pakai endpoint pertama, frontend berhenti polling dan nampilin hasil kosong. Jadi `jobs.py` ngambil status dari endpoint kedua.
+In inngest-cli 1.46, the run list per event can already say `"Completed"` while the run is **still going** (`ended_at: null`, no `output` yet). If you only use the first endpoint, the frontend stops polling and shows an empty result. So `jobs.py` takes the status from the second endpoint.
 
-🧩 Bikin `src/data_agent/jobs.py`:
+🧩 Create `src/data_agent/jobs.py`:
 
 ```python
-# jobs.py: nanya status job ke Inngest dev server + bikin file Excel dari hasilnya
+# jobs.py: asks the Inngest dev server for job status + builds the Excel file from the result
 import io
 from typing import Any, Literal
 
@@ -2097,22 +2097,22 @@ from data_agent import config
 
 class JobStatus(BaseModel):
     status: Literal['running', 'completed', 'failed']
-    result: dict[str, Any] | None = None   # isi JobResult kalau udah selesai
+    result: dict[str, Any] | None = None   # JobResult contents once finished
     error: str | None = None
 
 
 async def get_job_status(event_id: str) -> JobStatus:
-    # satu event -> satu "run" di Inngest. Kita tanya statusnya lewat REST API dev server
+    # one event -> one "run" in Inngest. We ask for its status through the dev server's REST API
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(f'{config.INNGEST_API_BASE}/events/{event_id}/runs')
         resp.raise_for_status()
         runs = resp.json().get('data') or []
         if not runs:
-            return JobStatus(status='running')  # run belum kebikin, tunggu sebentar
+            return JobStatus(status='running')  # run not created yet, wait a moment
 
-        # daftar run per event cuma dipakai buat nyari run_id: status di situ bisa udah
-        # "Completed" padahal run masih jalan (dan output-nya belum ada).
-        # status + output yang bener diambil dari detail run-nya langsung
+        # the per-event run list is only used to find the run_id: its status can already be
+        # "Completed" while the run is still going (and its output doesn't exist yet).
+        # the real status + output come from the run's own detail
         resp = await client.get(f"{config.INNGEST_API_BASE}/runs/{runs[0]['run_id']}")
         resp.raise_for_status()
 
@@ -2121,7 +2121,7 @@ async def get_job_status(event_id: str) -> JobStatus:
     if status == 'Completed':
         return JobStatus(status='completed', result=run.get('output'))
     if status in ('Failed', 'Cancelled'):
-        # output error dari Inngest bentuknya {name, message, stack, ...}: ambil pesannya aja
+        # Inngest's error output looks like {name, message, stack, ...}: take only the message
         output = run.get('output')
         message = output.get('message') if isinstance(output, dict) else None
         return JobStatus(status='failed', error=message or str(output))
@@ -2129,21 +2129,21 @@ async def get_job_status(event_id: str) -> JobStatus:
 
 
 def tables_to_excel(result: dict[str, Any]) -> bytes:
-    # tiap tabel jadi satu sheet di file Excel
+    # each table becomes one sheet in the Excel file
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         for i, table in enumerate(result.get('tables', []), start=1):
             df = pd.DataFrame(table['rows'], columns=table['columns'])
-            sheet = f"{i}_{table['id']}"[:31]  # nama sheet Excel maksimal 31 karakter
+            sheet = f"{i}_{table['id']}"[:31]  # Excel sheet names are at most 31 characters
             df.to_excel(writer, sheet_name=sheet, index=False)
     return buffer.getvalue()
 ```
 
-🧩 Bikin `src/data_agent/main.py`:
+🧩 Create `src/data_agent/main.py`:
 
 ```python
-# main.py: server FastAPI + fungsi Inngest
-# jalanin: uv run uvicorn data_agent.main:app --reload --port 8000
+# main.py: FastAPI server + Inngest function
+# run: uv run uvicorn data_agent.main:app --reload --port 8000
 import asyncio
 import logging
 import uuid
@@ -2167,7 +2167,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title='Data Process Agent')
 
-# CORS: izinin frontend (beda port = beda "origin") manggil API ini dari browser
+# CORS: allow the frontend (different port = different "origin") to call this API from the browser
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.FRONTEND_ORIGIN],
@@ -2184,14 +2184,14 @@ inngest_client = inngest.Inngest(
 
 
 def in_thread(fn: Callable) -> Callable:
-    # fungsi pipeline itu "blocking" (nunggu LLM / baca file).
-    # dijalanin di thread lain biar server tetap bisa ngelayanin request lain
+    # the pipeline functions are "blocking" (waiting on the LLM / reading files).
+    # run them in another thread so the server can keep serving other requests
     async def wrapper(*args):
         return await asyncio.to_thread(fn, *args)
     return wrapper
 
 
-# ---------- fungsi Inngest: 5 step ----------
+# ---------- Inngest function: 5 steps ----------
 @inngest_client.create_function(
     fn_id='process-data-job',
     trigger=inngest.TriggerEvent(event='data/process'),
@@ -2221,7 +2221,7 @@ async def process_job(ctx: inngest.Context) -> dict:
 inngest.fast_api.serve(app, inngest_client, [process_job])
 
 
-# ---------- endpoint buat frontend ----------
+# ---------- endpoints for the frontend ----------
 @app.get('/api/health')
 async def health() -> dict:
     return {'ok': True, 'model': config.LLM_MODEL}
@@ -2229,18 +2229,18 @@ async def health() -> dict:
 
 @app.post('/api/jobs')
 async def create_job(files: list[UploadFile]) -> dict:
-    # 1. cek file: minimal 1 guide, tepat 1 file data
+    # 1. check the files: at least 1 guide, exactly 1 data file
     guides = [f for f in files if classify(f.filename or '') == 'guide']
     datas = [f for f in files if classify(f.filename or '') == 'data']
     unknown = [f.filename for f in files if classify(f.filename or '') is None]
     if unknown:
-        raise HTTPException(400, f'jenis file gak didukung: {unknown}')
+        raise HTTPException(400, f'unsupported file type: {unknown}')
     if not guides:
-        raise HTTPException(400, 'butuh minimal 1 file guide (PDF/gambar)')
+        raise HTTPException(400, 'need at least 1 guide file (PDF/image)')
     if len(datas) != 1:
-        raise HTTPException(400, 'butuh tepat 1 file data (.xlsx/.csv)')
+        raise HTTPException(400, 'need exactly 1 data file (.xlsx/.csv)')
 
-    # 2. simpan file ke uploads/<job_id>/
+    # 2. save the files to uploads/<job_id>/
     job_id = uuid.uuid4().hex
     job_dir = config.UPLOAD_DIR / job_id
     job_dir.mkdir(parents=True)
@@ -2248,19 +2248,19 @@ async def create_job(files: list[UploadFile]) -> dict:
     for f in guides + datas:
         content = await f.read()
         if len(content) > config.MAX_UPLOAD_MB * 1024 * 1024:
-            raise HTTPException(413, f'{f.filename} lebih dari {config.MAX_UPLOAD_MB} MB')
-        path = job_dir / Path(f.filename or 'file').name  # cuma nama file, biar gak bisa "kabur" dari folder
+            raise HTTPException(413, f'{f.filename} is larger than {config.MAX_UPLOAD_MB} MB')
+        path = job_dir / Path(f.filename or 'file').name  # file name only, so it can't "escape" the folder
         path.write_bytes(content)
         saved[classify(path.name)].append(str(path))
 
-    # 3. kirim event ke Inngest -> fungsi process_job jalan di background
+    # 3. send an event to Inngest -> the process_job function runs in the background
     ids = await inngest_client.send(inngest.Event(name='data/process', data={
         'job_id': job_id,
         'work_dir': str(job_dir),
         'guide_paths': saved['guide'],
         'data_path': saved['data'][0],
     }))
-    logger.info('job %s dibuat, event %s', job_id, ids[0])
+    logger.info('job %s created, event %s', job_id, ids[0])
     return {'job_id': job_id, 'event_id': ids[0]}
 
 
@@ -2273,18 +2273,18 @@ async def job_status(event_id: str) -> JobStatus:
 async def export_job(event_id: str) -> Response:
     status = await get_job_status(event_id)
     if status.status != 'completed' or not status.result:
-        raise HTTPException(409, 'job belum selesai')
+        raise HTTPException(409, 'job is not finished yet')
     return Response(
         content=tables_to_excel(status.result),
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename="hasil_{event_id[:8]}.xlsx"'},
+        headers={'Content-Disposition': f'attachment; filename="result_{event_id[:8]}.xlsx"'},
     )
 ```
 
-🧩 Bikin `tests/test_api.py`:
+🧩 Create `tests/test_api.py`:
 
 ```python
-# test endpoint FastAPI pakai TestClient (gak perlu server beneran)
+# test the FastAPI endpoints with TestClient (no real server needed)
 import pytest
 from fastapi.testclient import TestClient
 
@@ -2296,7 +2296,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main.config, 'UPLOAD_DIR', tmp_path)
     sent = []
 
-    async def fake_send(event):  # gantiin kirim event ke Inngest
+    async def fake_send(event):  # stands in for sending the event to Inngest
         sent.append(event)
         return ['event-123']
 
@@ -2310,33 +2310,33 @@ def test_health(client):
     assert client.get('/api/health').json()['ok'] is True
 
 
-def test_upload_tanpa_file_data_ditolak(client):
+def test_upload_without_data_file_rejected(client):
     res = client.post('/api/jobs', files=[('files', ('guide.pdf', b'%PDF', 'application/pdf'))])
-    assert res.status_code == 400 and 'file data' in res.json()['detail']
+    assert res.status_code == 400 and 'data file' in res.json()['detail']
 
 
-def test_upload_jenis_file_aneh_ditolak(client):
+def test_upload_unknown_file_type_rejected(client):
     res = client.post('/api/jobs', files=[('files', ('virus.exe', b'x', 'application/octet-stream'))])
     assert res.status_code == 400
 
 
-def test_upload_valid_kirim_event(client, tmp_path):
+def test_valid_upload_sends_event(client, tmp_path):
     files = [
         ('files', ('guide.pdf', b'%PDF', 'application/pdf')),
-        ('files', ('../../data.xlsx', b'xlsx', 'application/octet-stream')),  # nama file "nakal"
+        ('files', ('../../data.xlsx', b'xlsx', 'application/octet-stream')),  # "naughty" file name
     ]
     res = client.post('/api/jobs', files=files)
     assert res.status_code == 200 and res.json()['event_id'] == 'event-123'
 
     data = client.sent[0].data
-    assert data['data_path'].startswith(str(tmp_path))  # tetap di dalam folder upload
+    assert data['data_path'].startswith(str(tmp_path))  # stays inside the upload folder
     assert data['data_path'].endswith('data.xlsx')
 ```
 
-🧩 🔄 Bikin `tests/test_jobs.py`. Inngest-nya dipalsuin pakai `httpx.MockTransport`, jadi gak perlu dev server:
+🧩 🔄 Create `tests/test_jobs.py`. Inngest is faked with `httpx.MockTransport`, so no dev server is needed:
 
 ```python
-# test cara baca status job dari Inngest, pakai server Inngest palsu (httpx.MockTransport)
+# test how job status is read from Inngest, using a fake Inngest server (httpx.MockTransport)
 import asyncio
 
 import httpx
@@ -2348,8 +2348,8 @@ from data_agent import jobs
 def fake_inngest(monkeypatch, runs: list[dict], detail: dict) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if '/events/' in request.url.path:
-            return httpx.Response(200, json={'data': runs})       # daftar run per event
-        return httpx.Response(200, json={'data': detail})         # detail satu run
+            return httpx.Response(200, json={'data': runs})       # list of runs per event
+        return httpx.Response(200, json={'data': detail})         # detail of one run
 
     real_client = httpx.AsyncClient
     monkeypatch.setattr(jobs.httpx, 'AsyncClient',
@@ -2360,21 +2360,21 @@ def status_of(event_id: str = 'evt') -> jobs.JobStatus:
     return asyncio.run(jobs.get_job_status(event_id))
 
 
-def test_run_belum_kebikin(monkeypatch):
+def test_run_not_created_yet(monkeypatch):
     fake_inngest(monkeypatch, runs=[], detail={})
     assert status_of().status == 'running'
 
 
-def test_daftar_bilang_completed_tapi_run_masih_jalan(monkeypatch):
-    # kejadian asli di inngest-cli 1.46: daftar run udah "Completed" waktu run masih jalan
+def test_list_says_completed_but_run_still_going(monkeypatch):
+    # real behavior in inngest-cli 1.46: the run list already says "Completed" while the run is still going
     fake_inngest(monkeypatch,
                  runs=[{'run_id': 'r1', 'status': 'Completed', 'ended_at': None}],
                  detail={'run_id': 'r1', 'status': 'Running', 'ended_at': None})
     assert status_of().status == 'running'
 
 
-def test_run_selesai_bawa_hasil(monkeypatch):
-    output = {'tables': [{'id': 'hasil'}]}
+def test_finished_run_carries_result(monkeypatch):
+    output = {'tables': [{'id': 'results'}]}
     fake_inngest(monkeypatch,
                  runs=[{'run_id': 'r1', 'status': 'Completed'}],
                  detail={'run_id': 'r1', 'status': 'Completed', 'output': output})
@@ -2383,21 +2383,21 @@ def test_run_selesai_bawa_hasil(monkeypatch):
 
 
 @pytest.mark.parametrize('status', ['Failed', 'Cancelled'])
-def test_run_gagal_cuma_bawa_pesan_error(monkeypatch, status):
-    # bentuk output error asli dari Inngest: ada stack trace yang gak perlu ditampilin ke user
+def test_failed_run_carries_only_the_error_message(monkeypatch, status):
+    # real shape of Inngest's error output: it has a stack trace that shouldn't be shown to the user
     output = {'code': 'step_errored', 'name': 'PlanError',
-              'message': 'rencana tetap gagal setelah 3 percobaan', 'stack': 'Traceback ...'}
+              'message': 'plan still failed after 3 attempts', 'stack': 'Traceback ...'}
     fake_inngest(monkeypatch,
                  runs=[{'run_id': 'r1', 'status': status}],
                  detail={'run_id': 'r1', 'status': status, 'output': output})
     job = status_of()
-    assert job.status == 'failed' and job.error == 'rencana tetap gagal setelah 3 percobaan'
+    assert job.status == 'failed' and job.error == 'plan still failed after 3 attempts'
 ```
 
-🧩 Bikin `tests/test_inngest_function.py`. Inngest punya client "mocked" buat ngetes fungsi 5 step tanpa dev server:
+🧩 Create `tests/test_inngest_function.py`. Inngest has a "mocked" client for testing the 5-step function without a dev server:
 
 ```python
-# test fungsi Inngest lengkap (5 step) pakai client "mocked" dari Inngest + LLM palsu
+# test the full Inngest function (5 steps) using Inngest's "mocked" client + a fake LLM
 import inngest
 from inngest.experimental import mocked
 
@@ -2405,12 +2405,12 @@ from data_agent import main, pipeline
 from data_agent.custom_types import Instructions, Plan, Review
 
 
-def test_process_job_jalan_sampai_selesai(bandul_dir, bandul_plan, monkeypatch, tmp_path):
+def test_process_job_runs_to_completion(pendulum_dir, pendulum_plan, monkeypatch, tmp_path):
     def fake_structured(prompt, schema, images=None, label=''):
         if schema is Instructions:
-            return Instructions(items=['hitung g'], expected_tables=['Hasil', 'Ringkasan'])
+            return Instructions(items=['calculate g'], expected_tables=['Results', 'Summary'])
         if schema is Plan:
-            return bandul_plan
+            return pendulum_plan
         return Review(items=[])
 
     monkeypatch.setattr(pipeline.llm, 'structured', fake_structured)
@@ -2418,59 +2418,59 @@ def test_process_job_jalan_sampai_selesai(bandul_dir, bandul_plan, monkeypatch, 
     event = inngest.Event(name='data/process', data={
         'job_id': 'test',
         'work_dir': str(tmp_path),
-        'guide_paths': [str(bandul_dir / 'guide.pdf')],
-        'data_path': str(bandul_dir / 'data.xlsx'),
+        'guide_paths': [str(pendulum_dir / 'guide.pdf')],
+        'data_path': str(pendulum_dir / 'data.xlsx'),
     })
 
     res = mocked.trigger(main.process_job, event, client)
 
     assert res.status == mocked.Status.COMPLETED
-    assert [t['id'] for t in res.output['tables']] == ['hasil', 'ringkasan']
+    assert [t['id'] for t in res.output['tables']] == ['results', 'summary']
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
-uv run pytest -v          # 36 test lolos
+uv run pytest -v          # 36 tests pass
 ```
 
 ---
 
-## Langkah 15: Jalanin server + Inngest dev server
+## Step 15: Run the server + Inngest dev server
 
-🎯 **Tujuan:** backend jalan beneran, job bisa dikirim lewat API dan dipantau di dashboard.
+🎯 **Goal:** the backend really runs, and jobs can be sent through the API and monitored in the dashboard.
 
-🧩 Buka **2 terminal**, dua-duanya di folder `backend/`:
+🧩 Open **2 terminals**, both in the `backend/` folder:
 
 ```fish
-# terminal 1: server FastAPI
+# terminal 1: FastAPI server
 uv run uvicorn data_agent.main:app --reload --port 8000
 ```
 
 ```fish
-# terminal 2: Inngest dev server (dashboard di http://localhost:8288)
+# terminal 2: Inngest dev server (dashboard at http://localhost:8288)
 npx --allow-scripts=inngest-cli inngest-cli@latest dev -u http://127.0.0.1:8000/api/inngest --no-discovery
 ```
 
-> 🔄 **npm 12:** install script package cuma jalan kalau namanya ada di `allow-scripts`. `inngest-cli` butuh install script buat download binary-nya, jadi wajib `--allow-scripts=inngest-cli`. Flag lama `--ignore-scripts=false` udah **gak cukup**.
+> 🔄 **npm 12:** a package's install script only runs if its name is in `allow-scripts`. `inngest-cli` needs an install script to download its binary, so `--allow-scripts=inngest-cli` is required. The old `--ignore-scripts=false` flag is **no longer enough**.
 
-✅ **Cek:** di **terminal 3**, kirim job pakai `curl`:
+✅ **Check:** in **terminal 3**, send a job with `curl`:
 
 ```fish
 curl http://localhost:8000/api/health
 
-curl -F files=@samples/bandul/guide.pdf -F files=@samples/bandul/data.xlsx http://localhost:8000/api/jobs
+curl -F files=@samples/pendulum/guide.pdf -F files=@samples/pendulum/data.xlsx http://localhost:8000/api/jobs
 # → {"job_id":"...","event_id":"01J..."}
 
 curl http://localhost:8000/api/jobs/<event_id>
-# ulangi sampai "status":"completed"
+# repeat until "status":"completed"
 ```
 
-Buka **http://localhost:8288** → menu **Runs** → klik run-nya. Di situ kelihatan 5 step, input/output tiap step, berapa lama, dan error kalau ada. 🎉
+Open **http://localhost:8288** → **Runs** menu → click the run. There you can see the 5 steps, each step's input/output, how long it took, and the error if there is one. 🎉
 
-Download Excel-nya: buka `http://localhost:8000/api/jobs/<event_id>/export` di browser.
+Download the Excel file: open `http://localhost:8000/api/jobs/<event_id>/export` in the browser.
 
-**Part 1 selesai.** Commit dulu:
+**Part 1 is done.** Commit first:
 
 ```fish
 cd ..; git add backend; git commit -m "backend: cli, eval, FastAPI + Inngest"; cd backend
@@ -2479,11 +2479,11 @@ cd ..; git add backend; git commit -m "backend: cli, eval, FastAPI + Inngest"; c
 ---
 # F. Part 2: Frontend (React)
 
-## Langkah F0: Bikin project Vite + React + TypeScript
+## Step F0: Create the Vite + React + TypeScript project
 
-🎯 **Tujuan:** kerangka frontend.
+🎯 **Goal:** the frontend skeleton.
 
-🧩 Dari folder `DATA-PROCESSOR/`:
+🧩 From the `DATA-PROCESSOR/` folder:
 
 ```fish
 npm create vite@latest frontend -- --template react-ts
@@ -2493,47 +2493,47 @@ npm install tailwindcss @tailwindcss/vite @tanstack/react-query @tanstack/react-
 npm install -D @types/node
 ```
 
-Hapus file contoh yang gak kepake:
+Delete the sample files that aren't used:
 
 ```fish
 rm -f src/App.css
 rm -rf src/assets
 ```
 
-Ganti judul tab di `index.html`: `<title>frontend</title>` → `<title>Data Process Agent</title>`.
+Change the tab title in `index.html`: `<title>frontend</title>` → `<title>Data Process Agent</title>`.
 
-Tambahin `.env` ke `frontend/.gitignore`:
+Add `.env` to `frontend/.gitignore`:
 
 ```fish
-printf '\n# setting lokal\n.env\n' >> .gitignore
+printf '\n# local settings\n.env\n' >> .gitignore
 ```
 
-Bikin `.env` (alamat backend) dan contohnya:
+Create `.env` (the backend address) and its example:
 
 ```fish
 printf 'VITE_API_URL=http://localhost:8000\n' > .env
 cp .env .env.example
 ```
 
-> Variabel env di Vite **wajib** diawali `VITE_` biar bisa dibaca dari kode browser. Jangan pernah taruh rahasia di sini: semua yang `VITE_` kelihatan oleh user.
+> Env variables in Vite **must** start with `VITE_` to be readable from browser code. Never put secrets here: everything `VITE_` is visible to users.
 
-✅ **Cek:** `npm run dev` → buka http://localhost:5173 → muncul halaman contoh Vite.
+✅ **Check:** `npm run dev` → open http://localhost:5173 → the Vite sample page appears.
 
 ---
 
-## Langkah F1: Tailwind + alias `@/` + shadcn/ui
+## Step F1: Tailwind + `@/` alias + shadcn/ui
 
-🎯 **Tujuan:** styling siap, dan komponen shadcn ke-install.
+🎯 **Goal:** styling is ready, and the shadcn components are installed.
 
-💡 **Konsep: alias `@/`.** Biar import gak jadi `../../../components/...`:
+💡 **Concept: the `@/` alias.** So imports don't become `../../../components/...`:
 
 ```ts
-import { Button } from '@/components/ui/button'   // @ = folder src/
+import { Button } from '@/components/ui/button'   // @ = the src/ folder
 ```
 
-Alias ini harus didaftarin di **dua** tempat: `vite.config.ts` (buat Vite) dan `tsconfig` (buat TypeScript).
+This alias must be registered in **two** places: `vite.config.ts` (for Vite) and `tsconfig` (for TypeScript).
 
-🧩 Ganti `vite.config.ts`:
+🧩 Replace `vite.config.ts`:
 
 ```ts
 import path from 'node:path'
@@ -2545,13 +2545,13 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    // "@/..." = folder src/, biar import gak "../../../"
+    // "@/..." = the src/ folder, so imports don't need "../../../"
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
 })
 ```
 
-🧩 Ganti `tsconfig.json`:
+🧩 Replace `tsconfig.json`:
 
 ```json
 {
@@ -2574,7 +2574,7 @@ export default defineConfig({
 }
 ```
 
-🧩 Ganti `tsconfig.app.json`:
+🧩 Replace `tsconfig.app.json`:
 
 ```json
 {
@@ -2613,7 +2613,7 @@ export default defineConfig({
 }
 ```
 
-🧩 Ganti isi `src/index.css` jadi satu baris aja (nanti shadcn yang nambahin sisanya):
+🧩 Replace the contents of `src/index.css` with just one line (shadcn adds the rest later):
 
 ```css
 @import "tailwindcss";
@@ -2627,36 +2627,36 @@ npx shadcn@latest init -t vite -b radix -p nova
 npx shadcn@latest add button card table badge alert
 ```
 
-| Flag | Artinya |
+| Flag | Meaning |
 |---|---|
-| `-t vite` | project-nya Vite |
-| `-b radix` | komponen pakai Radix UI. **Wajib**, karena `App.tsx` pakai `<Button asChild>` (itu fitur Radix) |
-| `-p nova` | preset tampilan (ikon Lucide, font Geist, base color **Neutral**). 🔄 shadcn 4 nanya preset, bukan base color |
+| `-t vite` | the project is Vite |
+| `-b radix` | components use Radix UI. **Required**, because `App.tsx` uses `<Button asChild>` (a Radix feature) |
+| `-p nova` | look preset (Lucide icons, Geist font, **Neutral** base color). 🔄 shadcn 4 asks for a preset, not a base color |
 
-`shadcn init` otomatis:
-- bikin `components.json` + `src/lib/utils.ts` (fungsi `cn()` buat gabungin class Tailwind)
-- nambahin warna tema ke `src/index.css`
-- install `radix-ui`, `class-variance-authority`, `cn`, `lucide-react`, `tw-animate-css`, `@fontsource-variable/geist`
+`shadcn init` automatically:
+- creates `components.json` + `src/lib/utils.ts` (the `cn()` function for merging Tailwind classes)
+- adds theme colors to `src/index.css`
+- installs `radix-ui`, `class-variance-authority`, `cn`, `lucide-react`, `tw-animate-css`, `@fontsource-variable/geist`
 
-> 🔄 `cn` itu package resmi dari shadcn (repo `shadcn-ui/cn`), pengganti `clsx` + `tailwind-merge` di versi lama. Isi `src/lib/utils.ts` jadi cuma `export { cn } from "cn"`.
+> 🔄 `cn` is shadcn's official package (repo `shadcn-ui/cn`), replacing `clsx` + `tailwind-merge` from older versions. The contents of `src/lib/utils.ts` become just `export { cn } from "cn"`.
 
-`shadcn add` nyalin kode komponen ke `src/components/ui/`. Kodenya punya lu sekarang, boleh dibaca & diubah.
+`shadcn add` copies component code into `src/components/ui/`. The code is yours now, feel free to read & change it.
 
-✅ **Cek:** `ls src/components/ui` → ada `alert.tsx badge.tsx button.tsx card.tsx table.tsx`.
+✅ **Check:** `ls src/components/ui` → you should see `alert.tsx badge.tsx button.tsx card.tsx table.tsx`.
 
 ---
 
-## Langkah F2: Lapisan API (`src/api/`)
+## Step F2: API layer (`src/api/`)
 
-🎯 **Tujuan:** semua urusan ngobrol sama backend dikumpulin di satu folder.
+🎯 **Goal:** everything about talking to the backend is collected in one folder.
 
-💡 **Konsep:** `types.ts` = **kembaran `custom_types.py`**. TypeScript bakal teriak kalau lu salah nama field. Tapi ini cuma jalan kalau dua file itu tetap **sama**. Ubah salah satu → ubah juga yang lain.
+💡 **Concept:** `types.ts` = the **twin of `custom_types.py`**. TypeScript will complain if you get a field name wrong. But this only works if the two files stay **the same**. Change one → change the other too.
 
-🧩 Bikin `src/api/types.ts`:
+🧩 Create `src/api/types.ts`:
 
 ```ts
-// types.ts: "kembaran" custom_types.py di backend
-// kalau bentuk data di backend berubah, ubah juga di sini
+// types.ts: the "twin" of custom_types.py in the backend
+// if the data shape changes in the backend, change it here too
 
 export type Cell = string | number | boolean | null
 
@@ -2692,27 +2692,27 @@ export interface CreateJobResponse {
 }
 ```
 
-🧩 Bikin `src/api/client.ts`:
+🧩 Create `src/api/client.ts`:
 
 ```ts
-// client.ts: semua panggilan ke backend dikumpulin di sini
+// client.ts: all calls to the backend are collected here
 import type { CreateJobResponse, JobStatus } from './types'
 
-// alamat backend diambil dari .env frontend (VITE_API_URL), default localhost:8000
+// backend address comes from the frontend .env (VITE_API_URL), default localhost:8000
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    // FastAPI ngirim error dalam bentuk { detail: "..." }
+    // FastAPI sends errors as { detail: "..." }
     const body = await res.json().catch(() => null)
-    throw new Error(body?.detail ?? `Request gagal (${res.status})`)
+    throw new Error(body?.detail ?? `Request failed (${res.status})`)
   }
   return res.json() as Promise<T>
 }
 
 export async function createJob(files: File[]): Promise<CreateJobResponse> {
   const form = new FormData()
-  files.forEach((f) => form.append('files', f)) // nama field "files" = parameter di FastAPI
+  files.forEach((f) => form.append('files', f)) // field name "files" = the parameter in FastAPI
   const res = await fetch(`${API_URL}/api/jobs`, { method: 'POST', body: form })
   return handle<CreateJobResponse>(res)
 }
@@ -2727,10 +2727,10 @@ export function exportUrl(eventId: string): string {
 }
 ```
 
-🧩 Bikin `src/api/files.ts` (aturan file, sama kayak di backend, biar user dikasih tau lebih awal):
+🧩 Create `src/api/files.ts` (the file rules, same as in the backend, so the user is told earlier):
 
 ```ts
-// files.ts: tebak jenis file dari ekstensinya (sama kayak classify() di backend)
+// files.ts: guess the file type from its extension (same as classify() in the backend)
 export type FileKind = 'guide' | 'data'
 
 const GUIDE_EXT = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
@@ -2743,52 +2743,52 @@ export function fileKind(name: string): FileKind | null {
   return null
 }
 
-// balikin pesan kalau kombinasi file belum lengkap, null kalau udah oke
+// return a message if the file combination is incomplete, null if it's fine
 export function validateFiles(files: File[]): string | null {
   const guides = files.filter((f) => fileKind(f.name) === 'guide').length
   const datas = files.filter((f) => fileKind(f.name) === 'data').length
-  if (guides === 0) return 'Tambahin minimal 1 file guide (PDF/gambar)'
-  if (datas !== 1) return 'Butuh tepat 1 file data (.xlsx/.csv)'
+  if (guides === 0) return 'Add at least 1 guide file (PDF/image)'
+  if (datas !== 1) return 'Need exactly 1 data file (.xlsx/.csv)'
   return null
 }
 ```
 
 ---
 
-## Langkah F3: Hook `useJob` + `QueryClientProvider`
+## Step F3: `useJob` hook + `QueryClientProvider`
 
-🎯 **Tujuan:** logika "upload → pantau status sampai selesai" dipisah dari tampilan.
+🎯 **Goal:** the "upload → watch status until finished" logic is separated from the UI.
 
-💡 **Konsep:**
+💡 **Concept:**
 
 ```
-useMutation  → buat AKSI   (upload file, sekali jalan)
-useQuery     → buat DATA   (status job); refetchInterval = tanya ulang tiap 1,5 detik
-               berhenti otomatis kalau status completed / failed
+useMutation  → for ACTIONS (uploading files, runs once)
+useQuery     → for DATA    (job status); refetchInterval = ask again every 1.5 seconds
+               stops automatically when the status is completed / failed
 ```
 
-🧩 Bikin `src/hooks/useJob.ts`:
+🧩 Create `src/hooks/useJob.ts`:
 
 ```ts
-// useJob.ts: kirim job + pantau statusnya sampai selesai
+// useJob.ts: submit a job + watch its status until it finishes
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createJob, getJobStatus } from '@/api/client'
 
-const POLL_MS = 1500 // cek status tiap 1,5 detik
+const POLL_MS = 1500 // check status every 1.5 seconds
 
 export function useJob() {
-  // useMutation = buat aksi yang "ngubah sesuatu" (upload file)
+  // useMutation = for actions that "change something" (uploading files)
   const upload = useMutation({ mutationFn: createJob })
   const eventId = upload.data?.event_id
 
-  // useQuery = buat "ngambil data"; refetchInterval bikin dia nanya ulang terus
+  // useQuery = for "fetching data"; refetchInterval makes it keep asking again
   const status = useQuery({
     queryKey: ['job', eventId],
     queryFn: () => getJobStatus(eventId!),
-    enabled: Boolean(eventId), // baru jalan setelah upload sukses
+    enabled: Boolean(eventId), // only runs after the upload succeeds
     refetchInterval: (query) => {
       const s = query.state.data?.status
-      return s === 'completed' || s === 'failed' ? false : POLL_MS // berhenti kalau udah selesai
+      return s === 'completed' || s === 'failed' ? false : POLL_MS // stop once it's finished
     },
   })
 
@@ -2807,7 +2807,7 @@ export function useJob() {
 }
 ```
 
-🧩 Ganti `src/main.tsx`:
+🧩 Replace `src/main.tsx`:
 
 ```tsx
 import { StrictMode } from 'react'
@@ -2816,7 +2816,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
 
-// QueryClient = "otak" TanStack Query: nyimpen cache & ngatur fetch ulang
+// QueryClient = the "brain" of TanStack Query: keeps the cache & manages refetching
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(
@@ -2830,14 +2830,14 @@ createRoot(document.getElementById('root')!).render(
 
 ---
 
-## Langkah F4: `FileDropzone.tsx`
+## Step F4: `FileDropzone.tsx`
 
-🎯 **Tujuan:** area drag & drop + daftar file yang udah dipilih, lengkap dengan label `guide` / `data`.
+🎯 **Goal:** the drag & drop area + list of chosen files, complete with `guide` / `data` labels.
 
-🧩 Bikin `src/components/FileDropzone.tsx`:
+🧩 Create `src/components/FileDropzone.tsx`:
 
 ```tsx
-// FileDropzone.tsx: area drag & drop + daftar file yang udah dipilih
+// FileDropzone.tsx: drag & drop area + list of the files already chosen
 import { FileSpreadsheet, FileText, Upload, X } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { fileKind } from '@/api/files'
@@ -2860,7 +2860,7 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/csv': ['.csv'],
     },
-    // file baru ditambahin ke daftar (bukan ngeganti)
+    // new files are added to the list (not replacing it)
     onDrop: (accepted) => onChange([...files, ...accepted]),
   })
 
@@ -2879,10 +2879,10 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
         <input {...getInputProps()} />
         <Upload className="size-8 text-muted-foreground" />
         <p className="font-medium">
-          {isDragActive ? 'Lepas file di sini…' : 'Drag & drop file, atau klik buat pilih'}
+          {isDragActive ? 'Drop files here…' : 'Drag & drop files, or click to choose'}
         </p>
         <p className="text-sm text-muted-foreground">
-          Guide: PDF / gambar · Data: 1 file .xlsx / .csv
+          Guide: PDF / image · Data: 1 .xlsx / .csv file
         </p>
       </div>
 
@@ -2897,7 +2897,7 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
                 <span className="flex-1 truncate text-sm">{file.name}</span>
                 <Badge variant={kind === 'data' ? 'default' : 'secondary'}>{kind ?? '?'}</Badge>
                 <Button variant="ghost" size="icon" onClick={() => remove(i)} disabled={disabled}
-                        aria-label={`Hapus ${file.name}`}>
+                        aria-label={`Remove ${file.name}`}>
                   <X />
                 </Button>
               </li>
@@ -2912,20 +2912,20 @@ export function FileDropzone({ files, onChange, disabled }: Props) {
 
 ---
 
-## Langkah F5: `ResultTable.tsx`, tabel hasil (TanStack Table v9)
+## Step F5: `ResultTable.tsx`, the result table (TanStack Table v9)
 
-🎯 **Tujuan:** nampilin satu tabel hasil yang bisa di-sort, plus daftar rumus di bawahnya.
+🎯 **Goal:** show one sortable result table, plus the list of formulas below it.
 
-💡 **Konsep 1:** data dari backend bentuknya **array per baris** (`[1, 0.3, 1.102, 9.753]`), jadi kolom ke-`i` diambil pakai `row[i]`.
+💡 **Concept 1:** data from the backend is an **array per row** (`[1, 0.3, 1.102, 9.753]`), so the `i`-th column is read with `row[i]`.
 
-💡 **Konsep 2: TanStack Table v9.** Fitur didaftarin dulu lewat `tableFeatures(...)`. Di sini cuma sorting. `features` dan `helper` ditaruh **di luar komponen** biar gak dibikin ulang tiap render.
+💡 **Concept 2: TanStack Table v9.** Features are registered first through `tableFeatures(...)`. Here it's only sorting. `features` and `helper` are kept **outside the component** so they aren't recreated on every render.
 
-> ⚠️ Kalau nemu tutorial pakai `useReactTable` / `getCoreRowModel`, itu API **v8** (lama). Di v9 pakai `useTable` + `tableFeatures`.
+> ⚠️ If you find a tutorial that uses `useReactTable` / `getCoreRowModel`, that's the (old) **v8** API. In v9 use `useTable` + `tableFeatures`.
 
-🧩 Bikin `src/components/ResultTable.tsx`:
+🧩 Create `src/components/ResultTable.tsx`:
 
 ```tsx
-// ResultTable.tsx: nampilin SATU tabel hasil, bisa di-sort dengan klik judul kolom
+// ResultTable.tsx: shows ONE result table, sortable by clicking a column header
 import { useMemo } from 'react'
 import {
   createColumnHelper,
@@ -2943,7 +2943,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 type Row = Cell[]
 
-// fitur tabel yang dipakai: cuma sorting. Ditaruh di luar komponen biar gak dibikin ulang tiap render
+// table features in use: only sorting. Kept outside the component so it isn't recreated on every render
 const features = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
@@ -2952,7 +2952,7 @@ const features = tableFeatures({
 const helper = createColumnHelper<typeof features, Row>()
 
 export function ResultTable({ table }: { table: ResultTableData }) {
-  // data dari backend bentuknya array per baris, jadi kolom ke-i diambil pakai row[i]
+  // data from the backend is an array per row, so the i-th column is read with row[i]
   const columns = useMemo(
     () =>
       helper.columns(
@@ -2967,7 +2967,7 @@ export function ResultTable({ table }: { table: ResultTableData }) {
     <Card>
       <CardHeader>
         <CardTitle>{table.title}</CardTitle>
-        <CardDescription>{table.rows.length} baris</CardDescription>
+        <CardDescription>{table.rows.length} {table.rows.length === 1 ? 'row' : 'rows'}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
@@ -3001,9 +3001,9 @@ export function ResultTable({ table }: { table: ResultTableData }) {
           </TableBody>
         </Table>
 
-        {/* rumus yang dipakai: biar user bisa ngecek LLM gak salah baca guide */}
+        {/* formulas used: so the user can check the LLM didn't misread the guide */}
         <div className="rounded-md bg-muted p-3">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Langkah & rumus</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Steps & formulas</p>
           <ul className="space-y-1 font-mono text-xs">
             {table.formulas.map((f, i) => (
               <li key={i}>{f}</li>
@@ -3018,14 +3018,14 @@ export function ResultTable({ table }: { table: ResultTableData }) {
 
 ---
 
-## Langkah F6: `ReviewList.tsx`
+## Step F6: `ReviewList.tsx`
 
-🎯 **Tujuan:** nampilin hasil step `review`: tiap instruksi ✅ atau ❌.
+🎯 **Goal:** show the `review` step result: each instruction ✅ or ❌.
 
-🧩 Bikin `src/components/ReviewList.tsx`:
+🧩 Create `src/components/ReviewList.tsx`:
 
 ```tsx
-// ReviewList.tsx: hasil step "cek ulang", tiap instruksi udah dipenuhi atau belum
+// ReviewList.tsx: result of the "review" step, whether each instruction was followed or not
 import { CircleCheck, CircleX } from 'lucide-react'
 import type { CheckItem } from '@/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -3035,9 +3035,9 @@ export function ReviewList({ items }: { items: CheckItem[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Cek instruksi</CardTitle>
+        <CardTitle>Instruction check</CardTitle>
         <CardDescription>
-          {done}/{items.length} instruksi terpenuhi
+          {done}/{items.length} instructions followed
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -3064,16 +3064,16 @@ export function ReviewList({ items }: { items: CheckItem[] }) {
 
 ---
 
-## Langkah F7: `App.tsx`, halaman utama
+## Step F7: `App.tsx`, the main page
 
-🎯 **Tujuan:** gabungin semuanya: upload → **Enter** → loading → tabel + cek instruksi + download Excel.
+🎯 **Goal:** put everything together: upload → **Enter** → loading → tables + instruction check + Excel download.
 
-💡 **Konsep:** tombol Enter dipasang di `window` lewat `useEffect`, jadi bisa dipencet di mana aja (kecuali lagi ngetik di input).
+💡 **Concept:** the Enter key is attached to `window` through `useEffect`, so it can be pressed anywhere (unless typing in an input).
 
-🧩 Ganti `src/App.tsx`:
+🧩 Replace `src/App.tsx`:
 
 ```tsx
-// App.tsx: halaman utama: upload -> Enter -> tunggu -> tabel hasil
+// App.tsx: main page: upload -> Enter -> wait -> result tables
 import { useEffect, useState } from 'react'
 import { Download, Loader2, RotateCcw } from 'lucide-react'
 import { exportUrl } from '@/api/client'
@@ -3094,7 +3094,7 @@ export default function App() {
   const canSubmit = !problem && !isRunning
   const submit = () => canSubmit && start(files)
 
-  // pencet Enter di mana aja = proses (kecuali lagi ngetik di input)
+  // pressing Enter anywhere = process (unless typing in an input)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
@@ -3117,26 +3117,26 @@ export default function App() {
       <header>
         <h1 className="text-2xl font-bold">Data Process Agent</h1>
         <p className="text-muted-foreground">
-          Masukin guide + data mentah, pencet <kbd className="rounded border px-1 text-xs">Enter</kbd>,
-          dapat tabel sesuai format guide.
+          Add a guide + raw data, press <kbd className="rounded border px-1 text-xs">Enter</kbd>,
+          and get tables in the format the guide asks for.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>1 · File</CardTitle>
-          <CardDescription>{problem ?? 'Siap diproses'}</CardDescription>
+          <CardTitle>1 · Files</CardTitle>
+          <CardDescription>{problem ?? 'Ready to process'}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <FileDropzone files={files} onChange={setFiles} disabled={isRunning} />
           <div className="flex gap-2">
             <Button onClick={submit} disabled={!canSubmit}>
               {isRunning && <Loader2 className="animate-spin" />}
-              {isRunning ? 'Memproses…' : 'Proses (Enter)'}
+              {isRunning ? 'Processing…' : 'Process (Enter)'}
             </Button>
             {(eventId || files.length > 0) && !isRunning && (
               <Button variant="outline" onClick={startOver}>
-                <RotateCcw /> Mulai ulang
+                <RotateCcw /> Start over
               </Button>
             )}
           </div>
@@ -3145,7 +3145,7 @@ export default function App() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>Gagal</AlertTitle>
+          <AlertTitle>Failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -3153,7 +3153,7 @@ export default function App() {
       {result && eventId && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">2 · Hasil ({result.tables.length} tabel)</h2>
+            <h2 className="text-xl font-semibold">2 · Results ({result.tables.length} {result.tables.length === 1 ? 'table' : 'tables'})</h2>
             <Button variant="outline" asChild>
               <a href={exportUrl(eventId)}>
                 <Download /> Download Excel
@@ -3171,97 +3171,97 @@ export default function App() {
 }
 ```
 
-✅ **Cek:**
+✅ **Check:**
 
 ```fish
-npm run build      # harus "✓ built", tanpa error TypeScript
+npm run build      # must say "✓ built", with no TypeScript errors
 npm run lint
 ```
 
-Warning `only-export-components` dari `badge.tsx` / `button.tsx` itu normal (file bawaan shadcn), boleh dicuekin.
+The `only-export-components` warnings from `badge.tsx` / `button.tsx` are normal (shadcn's built-in files), you can ignore them.
 
 ---
 
-## Langkah F8: Jalanin semuanya 🎉
+## Step F8: Run everything 🎉
 
-Buka **3 terminal**:
+Open **3 terminals**:
 
-| Terminal | Folder | Perintah |
+| Terminal | Folder | Command |
 |---|---|---|
 | 1 | `backend/` | `uv run uvicorn data_agent.main:app --reload --port 8000` |
 | 2 | `backend/` | `npx --allow-scripts=inngest-cli inngest-cli@latest dev -u http://127.0.0.1:8000/api/inngest --no-discovery` |
 | 3 | `frontend/` | `npm run dev` |
 
-✅ **Cek:**
-1. Buka http://localhost:5173
-2. Drag `backend/samples/bandul/guide.pdf` + `data.xlsx`
-3. Pencet **Enter**
-4. Tunggu → muncul **2 tabel** + rumus + cek instruksi
-5. Klik judul kolom → tabel ke-sort
-6. Klik **Download Excel** → dapat file `.xlsx` dengan 2 sheet
-7. Buka http://localhost:8288 → lihat run-nya di dashboard Inngest
+✅ **Check:**
+1. Open http://localhost:5173
+2. Drag `backend/samples/pendulum/guide.pdf` + `data.xlsx`
+3. Press **Enter**
+4. Wait → **2 tables** + formulas + instruction check appear
+5. Click a column header → the table gets sorted
+6. Click **Download Excel** → you get an `.xlsx` file with 2 sheets
+7. Open http://localhost:8288 → see the run in the Inngest dashboard
 
 Commit:
 
 ```fish
-cd ..; git add frontend; git commit -m "frontend: upload, polling, tabel hasil"
+cd ..; git add frontend; git commit -m "frontend: upload, polling, result tables"
 ```
 
-**App jadi.** 🚀
+**The app is done.** 🚀
 
 ---
 
 # G. Maintenance
 
-## G1. Perintah sehari-hari
+## G1. Everyday commands
 
-| Mau ngapain | Perintah (folder) |
+| What you want to do | Command (folder) |
 |---|---|
-| Jalanin app | 3 terminal di [F8](#langkah-f8-jalanin-semuanya-) |
-| Jalanin semua test | `uv run pytest` (backend) |
-| Rapor kualitas model/prompt | `uv run data-agent-eval` (backend) |
-| Proses file dari terminal | `uv run data-agent guide.pdf data.xlsx` (backend) |
-| Cek frontend | `npm run build && npm run lint` (frontend) |
-| Install ulang semua package | `uv sync` (backend) / `npm ci` (frontend) |
+| Run the app | 3 terminals in [F8](#step-f8-run-everything-) |
+| Run all tests | `uv run pytest` (backend) |
+| Model/prompt quality report | `uv run data-agent-eval` (backend) |
+| Process files from the terminal | `uv run data-agent guide.pdf data.xlsx` (backend) |
+| Check the frontend | `npm run build && npm run lint` (frontend) |
+| Reinstall all packages | `uv sync` (backend) / `npm ci` (frontend) |
 
-## G2. Aturan emas
+## G2. Golden rules
 
-1. **Tiap ubah kode backend** → `uv run pytest` harus tetap hijau
-2. **Tiap ubah prompt / ganti model** → `uv run data-agent-eval` harus tetap lolos
-3. **Tiap ubah `custom_types.py`** → ubah juga `frontend/src/api/types.ts`
-4. **Tiap nambah/ubah op** → ubah juga `OPS_REFERENCE` di `prompts.py`
-5. **`uv.lock` dan `package-lock.json` selalu di-commit**, `.env` gak pernah
+1. **Every time you change backend code** → `uv run pytest` must stay green
+2. **Every time you change a prompt / switch model** → `uv run data-agent-eval` must still pass
+3. **Every time you change `custom_types.py`** → change `frontend/src/api/types.ts` too
+4. **Every time you add/change an op** → change `OPS_REFERENCE` in `prompts.py` too
+5. **`uv.lock` and `package-lock.json` are always committed**, `.env` never
 
-## G3. Ganti model
+## G3. Switching models
 
-Cukup edit `backend/.env`, lalu restart uvicorn:
+Just edit `backend/.env`, then restart uvicorn:
 
 ```bash
-LLM_MODEL=qwen3-vl:2b-instruct      # 🔄 yang dipakai sekarang (laptop cuma CPU)
-# LLM_MODEL=qwen3-vl:4b-instruct    # lebih pinter, ~2x lebih lambat
-# LLM_MODEL=glm-5.3-flash:cloud     # Ollama cloud (harus `ollama signin` + credit dulu)
+LLM_MODEL=qwen3-vl:2b-instruct      # 🔄 the one in use now (CPU-only laptop)
+# LLM_MODEL=qwen3-vl:4b-instruct    # smarter, ~2x slower
+# LLM_MODEL=glm-5.3-flash:cloud     # Ollama cloud (needs `ollama signin` + credit first)
 ```
 
-Habis ganti, **selalu** jalanin `uv run data-agent-eval` buat bandingin hasilnya.
+After switching, **always** run `uv run data-agent-eval` to compare the results.
 
-> Model cloud: guide & data dikirim ke server Ollama (kebanyakan di Amerika). Ollama bilang prompt gak dicatat & gak dipakai training, tapi tetap: data gak cuma di laptop lagi.
+> Cloud models: the guide & data are sent to Ollama's servers (mostly in the US). Ollama says prompts aren't logged & aren't used for training, but still: the data is no longer only on your laptop.
 
-## G4. Cara nambah op baru
+## G4. How to add a new op
 
-Contoh: op `percent` (persentase tiap baris terhadap total kolom).
+Example: a `percent` op (each row's percentage of the column total).
 
-| # | File | Yang ditambah |
+| # | File | What to add |
 |---|---|---|
-| 1 | `custom_types.py` | `'percent'` ke `OpName` (+ field baru di `Step` kalau perlu) |
-| 2 | `operations.py` | fungsi `op_percent(df, step)` |
-| 3 | `operations.py` | daftarin di `OPERATIONS` |
-| 4 | `operations.py` | case baru di `describe_step` |
-| 5 | `prompts.py` | baris baru di `OPS_REFERENCE` |
-| 6 | `tests/test_operations.py` | test buat op baru |
+| 1 | `custom_types.py` | `'percent'` to `OpName` (+ a new field in `Step` if needed) |
+| 2 | `operations.py` | the function `op_percent(df, step)` |
+| 3 | `operations.py` | register it in `OPERATIONS` |
+| 4 | `operations.py` | a new case in `describe_step` |
+| 5 | `prompts.py` | a new line in `OPS_REFERENCE` |
+| 6 | `tests/test_operations.py` | a test for the new op |
 
 ```python
 def op_percent(df: pd.DataFrame, step: Step) -> pd.DataFrame:
-    # kolom baru = nilai / total kolom * 100
+    # new column = value / column total * 100
     _need(step, 'new_column', 'columns')
     _check_columns(df, step.columns)
     col = step.columns[0]
@@ -3270,129 +3270,129 @@ def op_percent(df: pd.DataFrame, step: Step) -> pd.DataFrame:
     return df
 ```
 
-## G5. Cara nambah sample baru
+## G5. How to add a new sample
 
 ```
 samples/
-└─ nama_sample/
-   ├─ guide.pdf        (atau .png/.jpg)
-   ├─ data.xlsx        (atau .csv)
+└─ sample_name/
+   ├─ guide.pdf        (or .png/.jpg)
+   ├─ data.xlsx        (or .csv)
    └─ expected.json    {"tables": [{"title": "...", "columns": [...], "rows": [[...]]}]}
 ```
 
-`expected.json` dihitung **manual** (Excel / kalkulator / script sendiri), jangan pakai output app, nanti salahnya ikut kesimpen. Makin banyak sample yang beda-beda (filter, group, regresi, foto guide), makin ketahuan kelemahan model/prompt.
+`expected.json` is calculated **manually** (Excel / a calculator / your own script), don't use the app's output, or its mistakes get saved too. The more varied samples you have (filter, group, regression, guide photo), the more the model/prompt weaknesses show.
 
-## G6. Update dependency
+## G6. Updating dependencies
 
 ```fish
 # backend
-uv lock --upgrade          # naikin semua versi di uv.lock
+uv lock --upgrade          # bump all versions in uv.lock
 uv sync
 uv run pytest && uv run data-agent-eval
 
 # frontend
-npm outdated               # lihat yang bisa di-update
+npm outdated               # see what can be updated
 npm update
 npm run build
 ```
 
-Update **satu per satu** untuk versi mayor (misal pandas 3 → 4), terus jalanin test tiap kali. Kalau rusak, `git checkout uv.lock` buat balik.
+Update **one at a time** for major versions (e.g. pandas 3 → 4), then run the tests each time. If something breaks, `git checkout uv.lock` to go back.
 
-## G7. Baca log & pantau token
+## G7. Reading logs & monitoring tokens
 
-Tiap panggilan LLM nyatat satu baris log:
+Each LLM call writes one log line:
 
 ```
-INFO data_agent.llm: [plan#1] model=qwen3-vl:8b input=2150 output=430 waktu=14.2s speed=30.3 tok/s
+INFO data_agent.llm: [plan#1] model=qwen3-vl:8b input=2150 output=430 time=14.2s speed=30.3 tok/s
 ```
 
-- `plan#2`, `plan#3` muncul = rencana pertama gagal dan dibenerin. Kalau sering, berarti prompt atau model perlu diperbaiki
-- `input` mendekati `LLM_NUM_CTX` = guide kepanjangan, sebagian bisa kepotong. Naikin `LLM_NUM_CTX` atau pecah guide-nya
-- error lengkap tiap step kelihatan di dashboard Inngest (http://localhost:8288)
+- `plan#2`, `plan#3` appearing = the first plan failed and was fixed. If this happens often, the prompt or model needs improving
+- `input` close to `LLM_NUM_CTX` = the guide is too long, part of it may get cut off. Raise `LLM_NUM_CTX` or split the guide
+- the full error of each step is visible in the Inngest dashboard (http://localhost:8288)
 
-## G8. README.md buat repo
+## G8. README.md for the repo
 
-Bikin `DATA-PROCESSOR/README.md`:
+Create `DATA-PROCESSOR/README.md`:
 
 ````markdown
 # Data Process Agent
 
-Upload guide (PDF/gambar) + data mentah (Excel/CSV) → tabel sesuai guide.
-LLM lokal (Ollama) bikin rencana, pandas yang ngitung.
+Upload a guide (PDF/image) + raw data (Excel/CSV) → tables that follow the guide.
+A local LLM (Ollama) makes the plan, pandas does the calculating.
 
-## Jalanin
+## Run
 1. `ollama pull qwen3-vl:8b`
 2. backend: `cp .env.example .env && uv sync`
-3. 3 terminal:
+3. 3 terminals:
    - `cd backend && uv run uvicorn data_agent.main:app --reload --port 8000`
    - `cd backend && npx --allow-scripts=inngest-cli inngest-cli@latest dev -u http://127.0.0.1:8000/api/inngest --no-discovery`
    - `cd frontend && npm ci && npm run dev`
-4. buka http://localhost:5173
+4. open http://localhost:5173
 
-## Cek kualitas
+## Check quality
 - `cd backend && uv run pytest`
 - `cd backend && uv run data-agent-eval`
 
-Detail lengkap: GUIDE.md
+Full details: GUIDE.md
 ````
 
 ---
 
 # 🆘 Troubleshooting
 
-| Gejala | Penyebab | Solusi |
+| Symptom | Cause | Fix |
 |---|---|---|
-| `KeyError: 'LLM_MODEL'` | `.env` gak ketemu | jalanin perintah dari folder `backend/`, cek isi `.env` |
-| `ConnectionError: Failed to connect to Ollama` | server Ollama mati | `sudo systemctl start ollama` |
-| `Server disconnected without sending a response` | 🔄 Ollama dibunuh kernel karena RAM habis (cek: `journalctl -u ollama` → `oom-kill`) | pakai model lebih kecil, atau turunin `LLM_NUM_CTX` (misal 8192) |
-| `model "qwen3-vl:8b" not found` | belum di-download | `ollama pull <nama model>` |
-| `ModuleNotFoundError` | package belum ke-install | `uv sync` |
-| model lambat banget | jalan di CPU / mode mikir | cek `ollama ps`; isi `LLM_THINK=false`; pakai versi `-instruct` yang lebih kecil; atau Ollama cloud |
-| `out of memory` / CUDA error | konteks kegedean | `LLM_NUM_CTX=8192` di `.env` |
-| warning "output gak sesuai schema" terus | model kesulitan ngikutin JSON | cek Langkah 5; coba model lain; sederhanain guide |
-| `rencana tetap gagal setelah 3 percobaan` | LLM gak nemu kolom/rumus yang bener | lihat pesan error di log; cek nama kolom di Excel; tambah contoh di `OPS_REFERENCE` |
-| angka hasil beda dari harapan | LLM salah baca rumus | lihat "Langkah & rumus" di UI; guide yang rumusnya teks biasa (bukan gambar) lebih aman |
-| frontend: `Failed to fetch` | backend mati / CORS | cek terminal 1; `FRONTEND_ORIGIN` di `backend/.env` harus `http://localhost:5173` |
-| status `running` terus | Inngest dev server mati / gak nyambung | cek terminal 2; buka http://localhost:8288 → Apps → harus ada `data-process-agent` |
-| `Inngest CLI binary not found` | 🔄 npm 12 nge-skip install script | pakai `npx --allow-scripts=inngest-cli ...`. Kalau masih error: hapus folder di `~/.npm/_npx/` yang isinya `node_modules/inngest-cli`, terus jalanin lagi |
-| `shadcn init` nanya preset terus | 🔄 shadcn 4 | pakai `npx shadcn@latest init -t vite -b radix -p nova` |
-| `Cannot find module '@/...'` | alias belum diatur | cek `vite.config.ts` + `tsconfig.json` + `tsconfig.app.json` (Langkah F1) |
-| `useReactTable is not exported` | pakai contoh TanStack Table v8 | pakai API v9 (`useTable`, `tableFeatures`), lihat F5 |
+| `KeyError: 'LLM_MODEL'` | `.env` not found | run commands from the `backend/` folder, check the contents of `.env` |
+| `ConnectionError: Failed to connect to Ollama` | the Ollama server is down | `sudo systemctl start ollama` |
+| `Server disconnected without sending a response` | 🔄 Ollama was killed by the kernel because RAM ran out (check: `journalctl -u ollama` → `oom-kill`) | use a smaller model, or lower `LLM_NUM_CTX` (e.g. 8192) |
+| `model "qwen3-vl:8b" not found` | not downloaded yet | `ollama pull <model name>` |
+| `ModuleNotFoundError` | packages not installed yet | `uv sync` |
+| model is extremely slow | running on CPU / thinking mode | check `ollama ps`; set `LLM_THINK=false`; use a smaller `-instruct` version; or Ollama cloud |
+| `out of memory` / CUDA error | context too large | `LLM_NUM_CTX=8192` in `.env` |
+| the warning "output does not match schema" keeps appearing | the model struggles to follow the JSON | check Step 5; try another model; simplify the guide |
+| `plan still failed after 3 attempts` | the LLM can't find the right column/formula | look at the error message in the log; check the column names in Excel; add examples to `OPS_REFERENCE` |
+| result numbers differ from what's expected | the LLM misread a formula | look at "Steps & formulas" in the UI; guides whose formulas are plain text (not images) are safer |
+| frontend: `Failed to fetch` | backend is down / CORS | check terminal 1; `FRONTEND_ORIGIN` in `backend/.env` must be `http://localhost:5173` |
+| status stays `running` | the Inngest dev server is down / not connected | check terminal 2; open http://localhost:8288 → Apps → `data-process-agent` should be there |
+| `Inngest CLI binary not found` | 🔄 npm 12 skips install scripts | use `npx --allow-scripts=inngest-cli ...`. If it still fails: delete the folder in `~/.npm/_npx/` that contains `node_modules/inngest-cli`, then run again |
+| `shadcn init` keeps asking for a preset | 🔄 shadcn 4 | use `npx shadcn@latest init -t vite -b radix -p nova` |
+| `Cannot find module '@/...'` | alias not configured | check `vite.config.ts` + `tsconfig.json` + `tsconfig.app.json` (Step F1) |
+| `useReactTable is not exported` | using a TanStack Table v8 example | use the v9 API (`useTable`, `tableFeatures`), see F5 |
 
 ---
 
-# H. Pengembangan berikutnya
+# H. Next steps
 
-Kerjain **setelah** app di atas jalan stabil dan `data-agent-eval` lolos.
+Do these **after** the app above runs stably and `data-agent-eval` passes.
 
-## H1. Konfirmasi rencana sebelum ngitung
+## H1. Confirm the plan before calculating
 
-Inngest bisa **pause** di tengah proses dan nunggu event dari user (`ctx.step.wait_for_event`). Alurnya:
-
-```
-make_plan → [tampilin rencana di UI, user klik "Setuju"] → run_plan → review
-```
-
-Cocok buat data eksperimen penting: user ngecek rumus dulu sebelum hasilnya dipakai.
-
-## H2. Perpustakaan template (Qdrant)
-
-Simpan guide yang pernah diproses + rencananya yang **udah terbukti benar**. Waktu ada guide baru, cari guide lama yang mirip, terus kasih rencananya ke LLM sebagai contoh.
+Inngest can **pause** mid-process and wait for an event from the user (`ctx.step.wait_for_event`). The flow:
 
 ```
-guide baru → embedding (qwen3-embedding:0.6b, dim 1024) → cari di Qdrant → 2 rencana lama paling mirip
-          → dimasukin ke prompt make_plan sebagai contoh → rencana baru lebih akurat
+make_plan → [show the plan in the UI, user clicks "Approve"] → run_plan → review
 ```
 
-Yang ditambah: `ollama pull qwen3-embedding:0.6b`, `uv add qdrant-client`, Qdrant via Docker, file `vector_db.py` (bisa contek `QdrantStorage` dari RAG-PDF, ganti `dim=1024`), dan fungsi `embed()` di `llm.py`.
+Good for important experiment data: the user checks the formulas first before the result is used.
 
-## H3. Riwayat job
+## H2. Template library (Qdrant)
 
-Sekarang hasil job cuma ada di Inngest dev server (hilang kalau dev server di-restart). Langkah berikutnya: simpan `JobResult` ke database kecil (SQLite) atau file JSON di `uploads/<job_id>/result.json`, plus halaman "riwayat" di frontend.
+Store guides that were processed before + their plans that were **proven correct**. When a new guide comes in, find a similar old guide, then give its plan to the LLM as an example.
+
+```
+new guide → embedding (qwen3-embedding:0.6b, dim 1024) → search Qdrant → the 2 most similar old plans
+          → inserted into the make_plan prompt as examples → a more accurate new plan
+```
+
+What to add: `ollama pull qwen3-embedding:0.6b`, `uv add qdrant-client`, Qdrant via Docker, a `vector_db.py` file (you can copy `QdrantStorage` from RAG-PDF, change to `dim=1024`), and an `embed()` function in `llm.py`.
+
+## H3. Job history
+
+Right now job results only live in the Inngest dev server (gone if the dev server restarts). Next step: save the `JobResult` to a small database (SQLite) or a JSON file at `uploads/<job_id>/result.json`, plus a "history" page in the frontend.
 
 ## H4. Deploy
 
-- Inngest: ganti dev server ke Inngest Cloud (butuh `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY`, dan `is_production=True`)
-- `jobs.py`: ganti cara cek status (REST API dev server beda dengan versi cloud)
-- Frontend: `npm run build` → folder `dist/` bisa di-host di mana aja; set `VITE_API_URL` ke alamat backend
-- Model: server dengan GPU, atau pindah ke Ollama cloud lewat `.env`
+- Inngest: switch the dev server to Inngest Cloud (needs `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY`, and `is_production=True`)
+- `jobs.py`: change how status is checked (the dev server's REST API differs from the cloud version)
+- Frontend: `npm run build` → the `dist/` folder can be hosted anywhere; set `VITE_API_URL` to the backend address
+- Model: a server with a GPU, or move to Ollama cloud through `.env`

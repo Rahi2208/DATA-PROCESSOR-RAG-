@@ -1,6 +1,6 @@
-# pipeline.py: tahap-tahap proses, masing-masing fungsi biasa
-# main.py ngebungkus tiap fungsi ini jadi 1 step Inngest,
-# tapi karena fungsi biasa, gampang dites & dijalanin tanpa Inngest
+# pipeline.py: the processing stages, each a plain function
+# main.py wraps each of these functions as one Inngest step,
+# but since they're plain functions, they're easy to test and run without Inngest
 import logging
 
 from data_agent import llm, prompts
@@ -10,7 +10,7 @@ from data_agent.executor import run_plan
 from data_agent.operations import PlanError
 
 logger = logging.getLogger(__name__)
-MAX_PLAN_ATTEMPTS = 3  # rencana gagal dijalanin -> error dikirim ke LLM buat dibenerin
+MAX_PLAN_ATTEMPTS = 3  # plan failed to run -> the error is sent to the LLM to fix
 
 
 def step_load(guide_paths: list[str], data_path: str, work_dir: str) -> InputBundle:
@@ -31,13 +31,13 @@ def step_plan(bundle: InputBundle, instructions: Instructions) -> Plan:
         prompt = prompts.make_plan(bundle, instructions, previous=plan, error=error)
         plan = llm.structured(prompt, Plan, label='plan')
         try:
-            run_plan(plan, sheets)  # "uji coba" di data asli: kalau error, ketahuan di sini
+            run_plan(plan, sheets)  # "dry run" on the real data: errors show up here
             return plan
         except PlanError as e:
             error = str(e)
-            logger.warning('rencana gagal (percobaan %s): %s', attempt, error)
+            logger.warning('plan failed (attempt %s): %s', attempt, error)
 
-    raise PlanError(f'rencana tetap gagal setelah {MAX_PLAN_ATTEMPTS} percobaan: {error}')
+    raise PlanError(f'plan still failed after {MAX_PLAN_ATTEMPTS} attempts: {error}')
 
 
 def step_run(bundle: InputBundle, plan: Plan) -> TableSet:
@@ -49,7 +49,7 @@ def step_review(instructions: Instructions, tables: TableSet) -> Review:
 
 
 def run_all(guide_paths: list[str], data_path: str, work_dir: str) -> JobResult:
-    # semua tahap berurutan, tanpa Inngest (buat CLI & evaluasi)
+    # all stages in order, without Inngest (for the CLI & evaluation)
     bundle = step_load(guide_paths, data_path, work_dir)
     instructions = step_extract(bundle)
     plan = step_plan(bundle, instructions)

@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# setting lokal
+# local settings
 .env

@@ -1,5 +1,5 @@
-// types.ts: "kembaran" custom_types.py di backend
-// kalau bentuk data di backend berubah, ubah juga di sini
+// types.ts: the "twin" of custom_types.py in the backend
+// if the data shape changes in the backend, change it here too
 
 export type Cell = string | number | boolean | null
 

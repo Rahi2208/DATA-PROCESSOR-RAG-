@@ -1,4 +1,4 @@
-// ReviewList.tsx: hasil step "cek ulang", tiap instruksi udah dipenuhi atau belum
+// ReviewList.tsx: result of the "review" step, whether each instruction was followed or not
 import { CircleCheck, CircleX } from 'lucide-react'
 import type { CheckItem } from '@/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,9 +8,9 @@ export function ReviewList({ items }: { items: CheckItem[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Cek instruksi</CardTitle>
+        <CardTitle>Instruction check</CardTitle>
         <CardDescription>
-          {done}/{items.length} instruksi terpenuhi
+          {done}/{items.length} instructions followed
         </CardDescription>
       </CardHeader>
       <CardContent>

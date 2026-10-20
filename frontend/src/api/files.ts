@@ -1,4 +1,4 @@
-// files.ts: tebak jenis file dari ekstensinya (sama kayak classify() di backend)
+// files.ts: guess the file type from its extension (same as classify() in the backend)
 export type FileKind = 'guide' | 'data'
 
 const GUIDE_EXT = ['.pdf', '.png', '.jpg', '.jpeg', '.webp']
@@ -11,11 +11,11 @@ export function fileKind(name: string): FileKind | null {
   return null
 }
 
-// balikin pesan kalau kombinasi file belum lengkap, null kalau udah oke
+// return a message if the file combination is incomplete, null if it's fine
 export function validateFiles(files: File[]): string | null {
   const guides = files.filter((f) => fileKind(f.name) === 'guide').length
   const datas = files.filter((f) => fileKind(f.name) === 'data').length
-  if (guides === 0) return 'Tambahin minimal 1 file guide (PDF/gambar)'
-  if (datas !== 1) return 'Butuh tepat 1 file data (.xlsx/.csv)'
+  if (guides === 0) return 'Add at least 1 guide file (PDF/image)'
+  if (datas !== 1) return 'Need exactly 1 data file (.xlsx/.csv)'
   return null
 }

@@ -9,27 +9,27 @@ from data_agent.executor import run_plan
 from data_agent.operations import PlanError
 
 
-def test_rencana_bandul_sesuai_jawaban(bandul_dir, bandul_plan):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    tables = run_plan(bandul_plan, sheets)
-    expected = json.loads((bandul_dir / 'expected.json').read_text())['tables']
+def test_pendulum_plan_matches_answer(pendulum_dir, pendulum_plan):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    tables = run_plan(pendulum_plan, sheets)
+    expected = json.loads((pendulum_dir / 'expected.json').read_text())['tables']
 
     assert compare(expected, [t.model_dump() for t in tables]) == []
-    assert tables[0].columns == ['Percobaan', 'L (m)', 'T (s)', 'g (m/s2)']  # format template
-    assert 'g = 4 * pi ** 2 * panjang_tali_m / t_periode ** 2' in tables[0].formulas
+    assert tables[0].columns == ['Trial', 'L (m)', 'T (s)', 'g (m/s2)']  # template format
+    assert 'g = 4 * pi ** 2 * string_length_m / t_period ** 2' in tables[0].formulas
 
 
-def test_source_salah(bandul_dir):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    plan = Plan(tables=[TablePlan(id='x', title='X', source='gak_ada', steps=[])])
-    with pytest.raises(PlanError, match="source 'gak_ada'"):
+def test_wrong_source(pendulum_dir):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    plan = Plan(tables=[TablePlan(id='x', title='X', source='does_not_exist', steps=[])])
+    with pytest.raises(PlanError, match="source 'does_not_exist'"):
         run_plan(plan, sheets)
 
 
-def test_error_nyebut_tabel_dan_step(bandul_dir):
-    sheets = read_data(str(bandul_dir / 'data.xlsx'))
-    plan = Plan(tables=[TablePlan(id='hasil', title='H', source='data', steps=[
-        Step(op='compute', new_column='T', expr='waktu / 10'),  # kolom "waktu" gak ada
+def test_error_mentions_table_and_step(pendulum_dir):
+    sheets = read_data(str(pendulum_dir / 'data.xlsx'))
+    plan = Plan(tables=[TablePlan(id='results', title='R', source='data', steps=[
+        Step(op='compute', new_column='T', expr='time / 10'),  # column "time" does not exist
     ])])
-    with pytest.raises(PlanError, match="tabel 'hasil', step 1"):
+    with pytest.raises(PlanError, match="table 'results', step 1"):
         run_plan(plan, sheets)

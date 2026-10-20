@@ -1,4 +1,4 @@
-// App.tsx: halaman utama: upload -> Enter -> tunggu -> tabel hasil
+// App.tsx: main page: upload -> Enter -> wait -> result tables
 import { useEffect, useState } from 'react'
 import { Download, Loader2, RotateCcw } from 'lucide-react'
 import { exportUrl } from '@/api/client'
@@ -19,7 +19,7 @@ export default function App() {
   const canSubmit = !problem && !isRunning
   const submit = () => canSubmit && start(files)
 
-  // pencet Enter di mana aja = proses (kecuali lagi ngetik di input)
+  // pressing Enter anywhere = process (unless typing in an input)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
@@ -42,26 +42,26 @@ export default function App() {
       <header>
         <h1 className="text-2xl font-bold">Data Process Agent</h1>
         <p className="text-muted-foreground">
-          Masukin guide + data mentah, pencet <kbd className="rounded border px-1 text-xs">Enter</kbd>,
-          dapat tabel sesuai format guide.
+          Add a guide + raw data, press <kbd className="rounded border px-1 text-xs">Enter</kbd>,
+          and get tables in the format the guide asks for.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>1 · File</CardTitle>
-          <CardDescription>{problem ?? 'Siap diproses'}</CardDescription>
+          <CardTitle>1 · Files</CardTitle>
+          <CardDescription>{problem ?? 'Ready to process'}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <FileDropzone files={files} onChange={setFiles} disabled={isRunning} />
           <div className="flex gap-2">
             <Button onClick={submit} disabled={!canSubmit}>
               {isRunning && <Loader2 className="animate-spin" />}
-              {isRunning ? 'Memproses…' : 'Proses (Enter)'}
+              {isRunning ? 'Processing…' : 'Process (Enter)'}
             </Button>
             {(eventId || files.length > 0) && !isRunning && (
               <Button variant="outline" onClick={startOver}>
-                <RotateCcw /> Mulai ulang
+                <RotateCcw /> Start over
               </Button>
             )}
           </div>
@@ -70,7 +70,7 @@ export default function App() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>Gagal</AlertTitle>
+          <AlertTitle>Failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -78,7 +78,7 @@ export default function App() {
       {result && eventId && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">2 · Hasil ({result.tables.length} tabel)</h2>
+            <h2 className="text-xl font-semibold">2 · Results ({result.tables.length} {result.tables.length === 1 ? 'table' : 'tables'})</h2>
             <Button variant="outline" asChild>
               <a href={exportUrl(eventId)}>
                 <Download /> Download Excel

@@ -1,9 +1,9 @@
 {
   "tables": [
     {
-      "title": "Hasil Perhitungan",
+      "title": "Calculation Results",
       "columns": [
-        "Percobaan",
+        "Trial",
         "L (m)",
         "T (s)",
         "g (m/s2)"
@@ -42,9 +42,9 @@
       ]
     },
     {
-      "title": "Ringkasan",
+      "title": "Summary",
       "columns": [
-        "g rata-rata",
+        "mean g",
         "error (%)"
       ],
       "rows": [

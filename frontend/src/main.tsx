@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
 
-// QueryClient = "otak" TanStack Query: nyimpen cache & ngatur fetch ulang
+// QueryClient = the "brain" of TanStack Query: keeps the cache & manages refetching
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(

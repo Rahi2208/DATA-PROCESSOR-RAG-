@@ -1,14 +1,14 @@
-# prompts.py: semua teks prompt dikumpulin di sini
-# prompt ditulis dalam bahasa Inggris karena model lebih konsisten,
-# tapi model diminta tetap pakai bahasa dokumen untuk judul & isi tabel
+# prompts.py: all prompt texts are collected here
+# prompts are written in English because the model is more consistent that way,
+# but the model is asked to keep the document's language for table titles & contents
 import json
 
 from data_agent.custom_types import InputBundle, Instructions, Plan, ResultTable
 
 OPS_REFERENCE = """
 Available operations (field "op") and their parameters:
-- compute:    new_column, expr   -> add a column from a formula, e.g. expr "waktu / 10"
-- filter:     expr               -> keep rows where the condition is true, e.g. "nilai > 0 and grup == 'A'"
+- compute:    new_column, expr   -> add a column from a formula, e.g. expr "time / 10"
+- filter:     expr               -> keep rows where the condition is true, e.g. "value > 0 and group == 'A'"
 - select:     columns            -> keep and ORDER these columns (use it last to match a template)
 - rename:     renames [{old, new}] -> rename columns (use it to match column names in a template)
 - sort:       by, descending
@@ -21,7 +21,7 @@ func is one of: mean, sum, min, max, count, std, median
 Formula rules (expr):
 - use ONLY column names that exist at that point (listed below, plus columns you created earlier)
 - power is ** (never ^). Constants: pi, e. Functions: sqrt, abs, log, log10, exp, sin, cos, tan
-- strings in conditions use single quotes: grup == 'A'
+- strings in conditions use single quotes: group == 'A'
 
 Table rules:
 - each table has: id (snake_case, unique), title (in the document's language), source, steps

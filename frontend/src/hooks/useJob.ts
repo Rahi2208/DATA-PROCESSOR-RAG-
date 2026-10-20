@@ -1,22 +1,22 @@
-// useJob.ts: kirim job + pantau statusnya sampai selesai
+// useJob.ts: submit a job + watch its status until it finishes
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createJob, getJobStatus } from '@/api/client'
 
-const POLL_MS = 1500 // cek status tiap 1,5 detik
+const POLL_MS = 1500 // check status every 1.5 seconds
 
 export function useJob() {
-  // useMutation = buat aksi yang "ngubah sesuatu" (upload file)
+  // useMutation = for actions that "change something" (uploading files)
   const upload = useMutation({ mutationFn: createJob })
   const eventId = upload.data?.event_id
 
-  // useQuery = buat "ngambil data"; refetchInterval bikin dia nanya ulang terus
+  // useQuery = for "fetching data"; refetchInterval makes it keep asking again
   const status = useQuery({
     queryKey: ['job', eventId],
     queryFn: () => getJobStatus(eventId!),
-    enabled: Boolean(eventId), // baru jalan setelah upload sukses
+    enabled: Boolean(eventId), // only runs after the upload succeeds
     refetchInterval: (query) => {
       const s = query.state.data?.status
-      return s === 'completed' || s === 'failed' ? false : POLL_MS // berhenti kalau udah selesai
+      return s === 'completed' || s === 'failed' ? false : POLL_MS // stop once it's finished
     },
   })
 

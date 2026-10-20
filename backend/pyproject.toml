@@ -1,7 +1,7 @@
 [project]
 name = "data-agent"
 version = "0.1.0"
-description = "Agent yang ngubah data mentah jadi tabel sesuai guide"
+description = "Agent that turns raw data into tables following a guide"
 readme = "README.md"
 authors = [
     { name = "Rahi", email = "rahirahmani2008@gmail.com" }
